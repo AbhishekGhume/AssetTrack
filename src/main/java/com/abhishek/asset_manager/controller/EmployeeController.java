@@ -2,6 +2,7 @@ package com.abhishek.asset_manager.controller;
 
 import com.abhishek.asset_manager.model.Request;
 import com.abhishek.asset_manager.service.EmployeeService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/emp")
+@Tag(name = "Employee APIs", description = "request, return, and see requests")
 public class EmployeeController {
 
     @Autowired

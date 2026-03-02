@@ -3,6 +3,7 @@ package com.abhishek.asset_manager.controller;
 import com.abhishek.asset_manager.model.Asset;
 import com.abhishek.asset_manager.model.User;
 import com.abhishek.asset_manager.service.AdminService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/admin")
+@Tag(name = "Admin APIs", description = "create and see assets")
 public class AdminController {
     @Autowired
     private AdminService adminService;

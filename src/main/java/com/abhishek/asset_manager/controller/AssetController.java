@@ -5,6 +5,7 @@ import com.abhishek.asset_manager.model.Request;
 import com.abhishek.asset_manager.model.User;
 import com.abhishek.asset_manager.repository.UserRepo;
 import com.abhishek.asset_manager.service.AssetService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/asset")
+@Tag(name = "Asset APIs", description = "see all assets")
 public class AssetController {
 
     @Autowired
