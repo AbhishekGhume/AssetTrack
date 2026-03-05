@@ -1,5 +1,6 @@
 package com.abhishek.asset_manager.service;
 
+import com.abhishek.asset_manager.dto.AssetResponseDto;
 import com.abhishek.asset_manager.exceptions.OutOfStock;
 import com.abhishek.asset_manager.exceptions.UserNotExistsException;
 import com.abhishek.asset_manager.model.Asset;
@@ -25,8 +26,18 @@ public class AssetService {
     @Autowired
     private AssetRepo assetRepo;
 
-    public List<Asset> getAllAssets() {
-        return assetRepo.findAll();
+    public List<AssetResponseDto> getAllAssets() {
+        return assetRepo.findAll()
+                .stream()
+                .map(asset -> {
+                    AssetResponseDto assetResponseDto = new AssetResponseDto();
+                    assetResponseDto.setAssetId(asset.getId().toHexString());
+                    assetResponseDto.setName(asset.getName());
+                    assetResponseDto.setQuantity(asset.getQuantity());
+                    assetResponseDto.setStatus(asset.getStatus());
+                    assetResponseDto.setAssetManagerId(asset.getAssignedManagerId().toHexString());
+                    return assetResponseDto;
+                }).toList();
     }
 
 }

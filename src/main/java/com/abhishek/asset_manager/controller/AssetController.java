@@ -1,10 +1,12 @@
 package com.abhishek.asset_manager.controller;
 
+import com.abhishek.asset_manager.dto.AssetResponseDto;
 import com.abhishek.asset_manager.model.Asset;
 import com.abhishek.asset_manager.model.Request;
 import com.abhishek.asset_manager.model.User;
 import com.abhishek.asset_manager.repository.UserRepo;
 import com.abhishek.asset_manager.service.AssetService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -24,7 +26,8 @@ public class AssetController {
     private AssetService assetService;
 
     @GetMapping("/get-all")
-    public ResponseEntity<List<Asset>> getAllAssets() {
+    @Operation(summary = "Get information of all assets", description = "Allows everyone to get the asset information like its id, name, quantity, status and its assigned asset manager.")
+    public ResponseEntity<List<AssetResponseDto>> getAllAssets() {
         return new ResponseEntity<>(assetService.getAllAssets(), HttpStatus.OK);
     }
 

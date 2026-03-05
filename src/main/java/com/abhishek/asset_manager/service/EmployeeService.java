@@ -1,5 +1,6 @@
 package com.abhishek.asset_manager.service;
 
+import com.abhishek.asset_manager.dto.RequestResponseDto;
 import com.abhishek.asset_manager.exceptions.OutOfStock;
 import com.abhishek.asset_manager.exceptions.UserNotExistsException;
 import com.abhishek.asset_manager.model.*;
@@ -29,28 +30,44 @@ public class EmployeeService {
     @Autowired
     private AssetRepo assetRepo;
 
-    public List<Request> getAllRequests() {
+    public List<RequestResponseDto> getAllRequests() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String email = authentication.getName();
         User user = userRepo.findByEmail(email);
-        return user.getUserRequests();
+        return user.getUserRequests().stream()
+                .map(request -> {
+                    RequestResponseDto requestResponseDto = new RequestResponseDto();
+                    requestResponseDto.setRequestId(request.getId().toHexString());
+                    requestResponseDto.setAssetId(request.getAssetId().toHexString());
+                    requestResponseDto.setRequestStatus(request.getRequestStatus());
+                    requestResponseDto.setRequestDate(request.getRequestDate().toString());
+
+                    if(request.getApprovedDate() == null) requestResponseDto.setApprovedDate("Not approved yet");
+                    else requestResponseDto.setApprovedDate(request.getApprovedDate().toString());
+
+                    if(request.getReturnDate() == null) requestResponseDto.setReturnDate("Not returned yet");
+                    else requestResponseDto.setReturnDate(request.getReturnDate().toString());
+
+                    return requestResponseDto;
+                }).toList();
     }
 
-    public void requestAsset(Request request) {
+    public void requestAsset(String id) {
+
+        ObjectId assetId = new ObjectId(id);
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User emp = userRepo.findByEmail(auth.getName());
 
         // Check if user already has a pending request for this specific asset
         boolean alreadyRequested = emp.getUserRequests().stream()
-                .anyMatch(req -> req.getAssetId().equals(request.getAssetId())
+                .anyMatch(req -> req.getAssetId().equals(assetId)
                         && req.getRequestStatus() == RequestStatus.PENDING);
 
         if (alreadyRequested) {
             throw new IllegalStateException("You already have a pending request for this asset.");
         }
 
-        ObjectId assetId = request.getAssetId();
         Asset asset = assetRepo.findById(assetId)
                 .orElseThrow(() -> new NoSuchElementException("Incorrect asset id"));
 
@@ -64,6 +81,8 @@ public class EmployeeService {
                 .orElseThrow(() -> new UserNotExistsException("Asset Manager not found"));
 
         // set request status to pending and request date to now
+        Request request = new Request();
+        request.setAssetId(assetId);
         request.setRequestStatus(RequestStatus.PENDING);
         request.setRequestDate(LocalDateTime.now());
 
@@ -82,7 +101,8 @@ public class EmployeeService {
         userRepo.save(employee); // This now has a valid ID to reference
     }
 
-    public void returnAsset(ObjectId requestId) {
+    public void returnAsset(String id) {
+        ObjectId requestId = new ObjectId(id);
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User currentUser = userRepo.findByEmail(auth.getName());
 
@@ -113,29 +133,29 @@ public class EmployeeService {
         assetRepo.save(asset);
     }
 
-    public List<Request> getAllPending() {
-        List<Request> allReq = getAllRequests();
+    public List<RequestResponseDto> getAllPending() {
+        List<RequestResponseDto> allReq = getAllRequests();
 
         return allReq.stream()
                 .filter(req -> req.getRequestStatus().equals(RequestStatus.PENDING)).toList();
     }
 
-    public List<Request> getAllApproved() {
-        List<Request> allReq = getAllRequests();
+    public List<RequestResponseDto> getAllApproved() {
+        List<RequestResponseDto> allReq = getAllRequests();
 
         return allReq.stream()
                 .filter(req -> req.getRequestStatus().equals(RequestStatus.APPROVED)).toList();
     }
 
-    public List<Request> getAllRejected() {
-        List<Request> allReq = getAllRequests();
+    public List<RequestResponseDto> getAllRejected() {
+        List<RequestResponseDto> allReq = getAllRequests();
 
         return allReq.stream()
                 .filter(req -> req.getRequestStatus().equals(RequestStatus.REJECTED)).toList();
     }
 
-    public List<Request> getAllReturned() {
-        List<Request> allReq = getAllRequests();
+    public List<RequestResponseDto> getAllReturned() {
+        List<RequestResponseDto> allReq = getAllRequests();
 
         return allReq.stream()
                 .filter(req -> req.getRequestStatus().equals(RequestStatus.RETURNED)).toList();

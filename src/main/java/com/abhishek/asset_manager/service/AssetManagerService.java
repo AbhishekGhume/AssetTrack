@@ -1,5 +1,6 @@
 package com.abhishek.asset_manager.service;
 
+import com.abhishek.asset_manager.dto.RequestResponseDto;
 import com.abhishek.asset_manager.model.*;
 import com.abhishek.asset_manager.repository.AssetRepo;
 import com.abhishek.asset_manager.repository.RequestRepo;
@@ -26,14 +27,31 @@ public class AssetManagerService {
     @Autowired
     private AssetRepo assetRepo;
 
-    public List<Request> getAllRequests() {
+    public List<RequestResponseDto> getAllRequests() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String email = authentication.getName();
         User user = userRepo.findByEmail(email);
-        return user.getRequestList();
+        return user.getRequestList().stream()
+                .map(request -> {
+                    RequestResponseDto requestResponseDto = new RequestResponseDto();
+                    requestResponseDto.setRequestId(request.getId().toHexString());
+                    requestResponseDto.setAssetId(request.getAssetId().toHexString());
+                    requestResponseDto.setRequestStatus(request.getRequestStatus());
+                    requestResponseDto.setRequestDate(request.getRequestDate().toString());
+
+                    if(request.getApprovedDate() == null) requestResponseDto.setApprovedDate("Not approved yet");
+                    else requestResponseDto.setApprovedDate(request.getApprovedDate().toString());
+
+                    if(request.getReturnDate() == null) requestResponseDto.setReturnDate("Not returned yet");
+                    else requestResponseDto.setReturnDate(request.getReturnDate().toString());
+
+                    return requestResponseDto;
+                }).toList();
     }
 
-    public void approveRequest(ObjectId requestId) {
+    public void approveRequest(String id) {
+        ObjectId requestId = new ObjectId(id);
+
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String email = authentication.getName();
         User loggedInManager = userRepo.findByEmail(email);
@@ -69,7 +87,9 @@ public class AssetManagerService {
         assetRepo.save(asset);
     }
 
-    public void rejectRequest(ObjectId requestId) {
+    public void rejectRequest(String id) {
+        ObjectId requestId = new ObjectId(id);
+
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String email = authentication.getName();
         User loggedInManager = userRepo.findByEmail(email);
@@ -90,29 +110,29 @@ public class AssetManagerService {
         requestRepo.save(request);
     }
 
-    public List<Request> allPending() {
-        List<Request> allRequests = getAllRequests();
+    public List<RequestResponseDto> allPending() {
+        List<RequestResponseDto> allRequests = getAllRequests();
 
         return allRequests.stream()
                 .filter(req -> req.getRequestStatus().equals(RequestStatus.PENDING)).toList();
     }
 
-    public List<Request> allApproved() {
-        List<Request> allRequests = getAllRequests();
+    public List<RequestResponseDto> allApproved() {
+        List<RequestResponseDto> allRequests = getAllRequests();
 
         return allRequests.stream()
                 .filter(req -> req.getRequestStatus().equals(RequestStatus.APPROVED)).toList();
     }
 
-    public List<Request> allRejected() {
-        List<Request> allRequests = getAllRequests();
+    public List<RequestResponseDto> allRejected() {
+        List<RequestResponseDto> allRequests = getAllRequests();
 
         return allRequests.stream()
                 .filter(req -> req.getRequestStatus().equals(RequestStatus.REJECTED)).toList();
     }
 
-    public List<Request> allReturned() {
-        List<Request> allRequests = getAllRequests();
+    public List<RequestResponseDto> allReturned() {
+        List<RequestResponseDto> allRequests = getAllRequests();
 
         return allRequests.stream()
                 .filter(req -> req.getRequestStatus().equals(RequestStatus.RETURNED)).toList();

@@ -1,6 +1,8 @@
 package com.abhishek.asset_manager.service;
 
 import com.abhishek.asset_manager.config.JwtUtil;
+import com.abhishek.asset_manager.dto.LoginRequestDto;
+import com.abhishek.asset_manager.dto.UserRegistrationDto;
 import com.abhishek.asset_manager.exceptions.UserAlreadyExistsException;
 import com.abhishek.asset_manager.exceptions.UserNotExistsException;
 import com.abhishek.asset_manager.model.Role;
@@ -33,27 +35,32 @@ public class PublicService {
 
     private static final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public void register(User user) {
-        if(userRepo.existsByEmail(user.getEmail())) {
+    public void register(UserRegistrationDto dto) {
+        if(userRepo.existsByEmail(dto.getEmail())) {
             throw new UserAlreadyExistsException("Already registered with this email");
         }
-        if (user.getRole() == null || user.getRole().isEmpty()) {
+
+        // mapping dto to entity
+        User user = new User();
+        user.setName(dto.getName());
+        user.setEmail(dto.getEmail());
+        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+
+        if (dto.getRole() == null || dto.getRole().isEmpty()) {
             user.setRole(Set.of(Role.EMPLOYEE)); // default role
+        } else {
+            user.setRole(dto.getRole());
         }
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
         userRepo.save(user);
     }
 
-    public String login(User user) {
+    public String login(LoginRequestDto loginRequestDto) {
         try {
 
-            // here we are checking if user is present or not i.e user is authenticated or not
-            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(user.getEmail(), user.getPassword()));
+            // here we are checking if user is present or not i.e. user is authenticated or not
+            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginRequestDto.getEmail(), loginRequestDto.getPassword()));
 
-            // here we are taking user details
-            UserDetails userDetails = userDetailService.loadUserByUsername(user.getEmail());
-
-            return jwtUtil.generateToken(user.getEmail());
+            return jwtUtil.generateToken(loginRequestDto.getEmail());
         } catch (UserNotExistsException e) {
             throw new UserNotExistsException("Incorrect email or password");
         }
