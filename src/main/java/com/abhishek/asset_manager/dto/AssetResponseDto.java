@@ -26,4 +26,7 @@ public class AssetResponseDto {
 
     @Schema(description = "Asset manager Id")
     private String assetManagerId;
+
+    @Schema(description = "Asset image url")
+    private String imageUrl;
 }

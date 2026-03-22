@@ -36,6 +36,7 @@ public class AssetService {
                     assetResponseDto.setQuantity(asset.getQuantity());
                     assetResponseDto.setStatus(asset.getStatus());
                     assetResponseDto.setAssetManagerId(asset.getAssignedManagerId().toHexString());
+                    assetResponseDto.setImageUrl(asset.getImageUrl());
                     return assetResponseDto;
                 }).toList();
     }
