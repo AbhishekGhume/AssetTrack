@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -49,5 +50,19 @@ public class AdminController {
     @Operation(summary = "Get info of all users", description = "Allows an Admin to get the info all all users like their id, name, email and role.")
     public ResponseEntity<List<UserResponseDto>> getAllUsers() {
         return new ResponseEntity<>(adminService.getAllUsers(), HttpStatus.OK);
+    }
+
+    @PutMapping("/make-admin/{id}")
+    @Operation(summary = "Make user/employee as a admin", description = "Allows an Admin to make user or employee as an Admin.")
+    public ResponseEntity<?> makeAdmin(@PathVariable String id) {
+        adminService.makeAdmin(id);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @PutMapping("/remove-admin/{id}")
+    @Operation(summary = "Remove admin role user/employee", description = "Allows an Admin to remove the ADMIN role of user or employee.")
+    public ResponseEntity<?> removeAdmin(@PathVariable String id) {
+        adminService.removeAdmin(id);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 }

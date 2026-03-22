@@ -31,6 +31,6 @@ public class UserRegistrationDto {
     @Schema(example = "Abhishek@1234", description = "The user password (minimum 6 characters)")
     private String password;
 
-    @Schema(example = "['EMPLOYEE']", description = "Role of the user")
+    @Schema(example = "[\"EMPLOYEE\"]", description = "Role of the user")
     private Set<Role> role;
 }

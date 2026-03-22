@@ -2,6 +2,7 @@ package com.abhishek.asset_manager.service;
 
 import com.abhishek.asset_manager.dto.AssetDto;
 import com.abhishek.asset_manager.dto.UserResponseDto;
+import com.abhishek.asset_manager.exceptions.UserAlreadyExistsException;
 import com.abhishek.asset_manager.exceptions.UserNotExistsException;
 import com.abhishek.asset_manager.model.Asset;
 import com.abhishek.asset_manager.model.AssetStatus;
@@ -21,6 +22,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -86,5 +88,23 @@ public class AdminService {
         }
 
         assetRepo.save(asset);
+    }
+
+    public void makeAdmin(String id) {
+        ObjectId objId = new ObjectId(id);
+        User user = userRepo.findById(objId).orElseThrow(() -> new UserNotExistsException("User with this id is not present"));
+        if(user.getRole().contains(Role.ADMIN)) throw new UserAlreadyExistsException("User is already ADMIN");
+        Set<Role> roles = user.getRole();
+        roles.add(Role.ADMIN);
+        userRepo.save(user);
+    }
+
+    public void removeAdmin(String id) {
+        ObjectId objId = new ObjectId(id);
+        User user = userRepo.findById(objId).orElseThrow(() -> new UserNotExistsException("User with this id is not present"));
+        if(!user.getRole().contains(Role.ADMIN)) throw new UserAlreadyExistsException("User is not an ADMIN");
+        Set<Role> roles = user.getRole();
+        roles.remove(Role.ADMIN);
+        userRepo.save(user);
     }
 }

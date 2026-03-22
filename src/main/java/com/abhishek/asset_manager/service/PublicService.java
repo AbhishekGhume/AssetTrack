@@ -49,6 +49,7 @@ public class PublicService {
         if (dto.getRole() == null || dto.getRole().isEmpty()) {
             user.setRole(Set.of(Role.EMPLOYEE)); // default role
         } else {
+            if(dto.getRole().contains(Role.ADMIN)) dto.getRole().remove(Role.ADMIN);
             user.setRole(dto.getRole());
         }
         userRepo.save(user);
