@@ -11,10 +11,17 @@ import com.abhishek.asset_manager.repository.AssetRepo;
 import com.abhishek.asset_manager.repository.UserRepo;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class AdminService {
@@ -23,6 +30,15 @@ public class AdminService {
 
     @Autowired
     private AssetRepo assetRepo;
+
+    @Autowired
+    private S3Client s3Client;
+
+    @Value("${cloud.aws.s3.bucket}")
+    private String bucketName;
+
+    @Value("${cloud.aws.region.static}")
+    private String region;
 
     public List<UserResponseDto> getAllUsers() {
         List<User> users = userRepo.findAll();
@@ -37,22 +53,38 @@ public class AdminService {
                 }).toList();
     }
 
-    public void createAsset(AssetDto assetDTO) {
+    public void createAsset(AssetDto assetDTO, MultipartFile image) throws IOException {
         ObjectId id = new ObjectId(assetDTO.getAssignedManagerId());
-        if(userRepo.existsById(id)) {
-            Optional<User> optionalUser = userRepo.findById(id);
-            if(optionalUser.isPresent()) {
-                User user = optionalUser.get();
-                if(user.getRole().contains(Role.ASSET_MANAGER)) {
-                    Asset asset = new Asset();
-                    asset.setName(assetDTO.getName());
-                    asset.setQuantity(assetDTO.getQuantity());
-                    if(assetDTO.getStatus() == null) asset.setStatus(AssetStatus.AVAILABLE);
-                    else asset.setStatus(assetDTO.getStatus());
-                    asset.setAssignedManagerId(new ObjectId(assetDTO.getAssignedManagerId()));
-                    assetRepo.save(asset);
-                }
-            }
-        } else throw new UserNotExistsException("The asset manager with provided id not present. Check the asset manager id again!");
+
+        User user = userRepo.findById(id)
+                .orElseThrow(() -> new UserNotExistsException(
+                        "The asset manager with provided id not present. Check the asset manager id again!"));
+
+        if (!user.getRole().contains(Role.ASSET_MANAGER)) {
+            throw new IllegalArgumentException("The provided user is not an Asset Manager.");
+        }
+
+        Asset asset = new Asset();
+        asset.setName(assetDTO.getName());
+        asset.setQuantity(assetDTO.getQuantity());
+        asset.setStatus(assetDTO.getStatus() != null ? assetDTO.getStatus() : AssetStatus.AVAILABLE);
+        asset.setAssignedManagerId(id);
+
+        if (image != null && !image.isEmpty()) {
+            String fileName = UUID.randomUUID() + "_" + image.getOriginalFilename();
+
+            s3Client.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(bucketName)
+                            .key(fileName)
+                            .contentType(image.getContentType())
+                            .build(),
+                    RequestBody.fromInputStream(image.getInputStream(), image.getSize()));
+
+            String url = String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, fileName);
+            asset.setImageUrl(url);
+        }
+
+        assetRepo.save(asset);
     }
 }

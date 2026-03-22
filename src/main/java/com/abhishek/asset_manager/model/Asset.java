@@ -24,6 +24,7 @@ public class Asset {
     private int quantity;
     private AssetStatus status;
     private ObjectId assignedManagerId;
+    private String imageUrl;
     @CreatedDate
     private LocalDateTime createdAt;
     @LastModifiedDate
