@@ -14,6 +14,7 @@
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.2-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Java](https://img.shields.io/badge/Java-17-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/17/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
+[![AWS S3](https://img.shields.io/badge/AWS-S3%20Storage-FF9900?style=for-the-badge&logo=amazons3&logoColor=white)](https://aws.amazon.com/s3/)
 [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 
 <br/>
@@ -39,7 +40,7 @@
 
 ## 🌟 Overview
 
-**AssetTrack** is a production-ready Spring Boot backend application that streamlines the entire lifecycle of company assets — from creation to assignment, approval, and return. Built with a clean multi-role ecosystem, it ensures every action is authorized, audited, and traceable.
+**AssetTrack** is a production-ready Spring Boot backend application that streamlines the entire lifecycle of company assets — from creation to assignment, approval, and return. Built with a clean multi-role ecosystem, it ensures every action is authorized, audited, and traceable. Assets support image uploads stored on AWS S3.
 
 ---
 
@@ -48,14 +49,14 @@
 ### 🔐 Multi-Role Authorization
 | Role | Capabilities |
 |------|-------------|
-| **Admin** | Create assets, assign them to managers, view all system users |
+| **Admin** | Create assets (with image), assign them to managers, manage user roles, view all system users |
 | **Asset Manager** | Approve or reject requests for their assigned assets |
 | **Employee** | Browse assets, submit requests, return approved items |
 
 ### ⚙️ Core Functionality
 
 ```
-📦 Asset Created by Admin
+📦 Asset Created by Admin (with optional image)
         │
         ▼
 👤 Employee Requests Asset  →  Status: PENDING
@@ -68,9 +69,11 @@
 ```
 
 - **🔑 JWT Authentication** — Stateless, secure token-based auth for every endpoint
+- **🖼️ Image Upload** — Asset images uploaded and stored on AWS S3
 - **📊 Real-time Inventory** — Stock auto-adjusts on approval and return
 - **🕐 Automated Auditing** — `createdAt` & `updatedAt` timestamps via MongoDB Auditing
 - **🛡️ Request Integrity** — Prevents duplicate pending requests for the same asset
+- **👑 Role Management** — Admin can promote or demote users to/from Admin role
 - **⚡ Exception Handling** — Global handler with meaningful HTTP status codes
 
 ---
@@ -85,6 +88,7 @@
 | **Language** | Java 17 |
 | **Database** | MongoDB Atlas |
 | **Security** | Spring Security 6 + JWT (JJWT 0.12.5) |
+| **File Storage** | AWS S3 (SDK v2) |
 | **API Docs** | SpringDoc OpenAPI 2.8.5 (Swagger UI) |
 | **Containerization** | Docker (Multi-stage build) |
 | **Build Tool** | Maven (wrapper included) |
@@ -96,18 +100,20 @@
 ## 🏗️ Architecture & Roles
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    AssetTrack API                    │
-├──────────────┬──────────────────┬───────────────────┤
-│   /public    │     /admin       │  /asset-manager   │
-│  (No Auth)   │  (ADMIN role)    │ (ASSET_MGR role)  │
-│              │                  │                   │
-│  • Register  │  • Create Asset  │  • View Requests  │
-│  • Login     │  • View Users    │  • Approve/Reject │
-├──────────────┴──────────────────┴───────────────────┤
-│              /emp  (EMPLOYEE role)                   │
-│   • Request Asset  • Return Asset  • View Requests  │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                      AssetTrack API                      │
+├──────────────┬───────────────────┬───────────────────────┤
+│   /public    │      /admin       │   /asset-manager      │
+│  (No Auth)   │   (ADMIN role)    │  (ASSET_MGR role)     │
+│              │                   │                       │
+│  • Register  │  • Create Asset   │  • View Requests      │
+│  • Login     │  • View Users     │  • Approve/Reject     │
+│              │  • Make Admin     │                       │
+│              │  • Remove Admin   │                       │
+├──────────────┴───────────────────┴───────────────────────┤
+│                /emp  (EMPLOYEE role)                     │
+│      • Request Asset  • Return Asset  • View Requests    │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -122,6 +128,8 @@
 | `POST` | `/public/register` | Register a new user |
 | `POST` | `/public/login` | Login and receive JWT token |
 
+> ⚠️ **Note:** The `role` field must be a proper JSON array, e.g. `["EMPLOYEE"]`. Registering with `ADMIN` role is not allowed — use the admin promotion endpoint instead.
+
 </details>
 
 <details>
@@ -129,7 +137,7 @@
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/asset/get-all` | View all available assets |
+| `GET` | `/asset/get-all` | View all available assets (includes image URL) |
 
 </details>
 
@@ -138,8 +146,10 @@
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/admin/create` | Create a new asset |
+| `POST` | `/admin/create` | Create a new asset with optional image upload |
 | `GET` | `/admin/get-all` | View all registered users |
+| `PUT` | `/admin/make-admin/{id}` | Promote a user to Admin role |
+| `PUT` | `/admin/remove-admin/{id}` | Remove Admin role from a user |
 
 </details>
 
@@ -164,7 +174,7 @@
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/emp/get-all-req` | View all my requests |
-| `POST` | `/emp/request-asset` | Request an asset |
+| `POST` | `/emp/request-asset/{assetId}` | Request an asset |
 | `PUT` | `/emp/return/{requestId}` | Return an approved asset |
 | `GET` | `/emp/get-all-pending` | Filter: my pending requests |
 | `GET` | `/emp/get-all-approved` | Filter: my approved requests |
@@ -181,6 +191,7 @@
 
 - ✅ JDK 17 or higher
 - ✅ MongoDB (local instance or Atlas cluster)
+- ✅ AWS account with an S3 bucket
 - ✅ Maven *(optional — wrapper included)*
 
 ### Step-by-Step
@@ -193,10 +204,13 @@ cd AssetTrack
 
 **2. Configure environment variables**
 
-Create `src/main/resources/application.properties`:
+Create a `.env` file in the project root:
 ```properties
-spring.data.mongodb.uri=your_mongodb_connection_string
-server.port=8080
+MONGODB_URI=your_mongodb_connection_string
+ACCESS_KEY=your_aws_access_key
+SECRET_KEY=your_aws_secret_key
+REGION=ap-south-1
+BUCKET_NAME=your_s3_bucket_name
 ```
 
 **3. Build and run**
@@ -207,7 +221,13 @@ server.port=8080
 
 # Or using Docker
 docker build -t assettrack .
-docker run -e MONGODB_URI=your_uri -p 8080:8080 assettrack
+docker run \
+  -e MONGODB_URI=your_uri \
+  -e ACCESS_KEY=your_key \
+  -e SECRET_KEY=your_secret \
+  -e REGION=ap-south-1 \
+  -e BUCKET_NAME=your_bucket \
+  -p 8080:8080 assettrack
 ```
 
 **4. Access the API**
@@ -228,9 +248,15 @@ This project is Docker-ready for one-click deployment on Render.
 | Variable | Value |
 |----------|-------|
 | `MONGODB_URI` | Your MongoDB Atlas connection string |
+| `ACCESS_KEY` | Your AWS IAM access key |
+| `SECRET_KEY` | Your AWS IAM secret key |
+| `REGION` | Your S3 bucket region (e.g. `ap-south-1`) |
+| `BUCKET_NAME` | Your S3 bucket name |
 | `PORT` | `8080` |
 
 > 💡 **MongoDB Atlas Tip:** Whitelist IP `0.0.0.0/0` in Atlas Network Access to allow connections from Render's dynamic IPs.
+
+> 💡 **AWS S3 Tip:** Make sure your S3 bucket has public read access enabled so that asset image URLs are accessible. Add a bucket policy allowing `s3:GetObject` for `Principal: *`.
 
 ---
 
@@ -248,6 +274,7 @@ POST /public/register
   "role": ["EMPLOYEE"]
 }
 ```
+> ⚠️ The `role` field must be a **JSON array**, not a string. Valid values: `EMPLOYEE`, `ASSET_MANAGER`. The `ADMIN` role can only be assigned via `/admin/make-admin/{id}`.
 
 **Step 2 — Login to get your token**
 ```json
@@ -265,7 +292,6 @@ Click the **🔓 Authorize** button → Enter `Bearer YOUR_TOKEN_HERE` → Click
 **Step 4 — Explore!**
 
 You can now call all role-protected endpoints based on your assigned role.
-
 
 ---
 
