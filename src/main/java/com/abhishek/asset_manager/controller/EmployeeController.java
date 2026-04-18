@@ -6,6 +6,7 @@ import com.abhishek.asset_manager.service.EmployeeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -17,10 +18,10 @@ import java.util.List;
 @RestController
 @RequestMapping("/emp")
 @Tag(name = "Employee APIs", description = "request, return, and see requests")
+@RequiredArgsConstructor
 public class EmployeeController {
 
-    @Autowired
-    private EmployeeService employeeService;
+    private final EmployeeService employeeService;
 
     @GetMapping("get-all-req")
     @Operation(summary = "Get all requests that employee had made", description = "Allows an employee to see all requests that he/she has made.")

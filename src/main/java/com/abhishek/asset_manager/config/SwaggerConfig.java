@@ -18,12 +18,14 @@ public class SwaggerConfig {
 
     @Bean
     public OpenAPI customOpenAPI() {
-
         return new OpenAPI()
                 .info(new Info().title("Asset Manager APIs")
                         .description("by Abhishek Ghume"))
-                .servers(Arrays.asList(new Server().url("http://localhost:8080").description("local server"),
-                        new Server().url("https://assettrack-63hd.onrender.com").description("public server")))
+                .servers(Arrays.asList(
+                        new Server().url("http://localhost:8080").description("local server"),
+                        new Server().url("https://assettrack-63hd.onrender.com").description("public server"),
+                        new Server().url("http://13.232.225.188:8080").description("EC2 Server")
+                        ))
                 .addSecurityItem(new SecurityRequirement().addList("JavaInUseSecurityScheme"))
                 .components(new Components().addSecuritySchemes("JavaInUseSecurityScheme", new SecurityScheme()
                         .name("JavaInUseSecurityScheme").type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT")));

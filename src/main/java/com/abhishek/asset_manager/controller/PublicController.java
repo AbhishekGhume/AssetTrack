@@ -7,6 +7,7 @@ import com.abhishek.asset_manager.service.PublicService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,10 +16,10 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/public")
 @Tag(name = "Public APIs", description = "register and login")
+@RequiredArgsConstructor
 public class PublicController {
 
-    @Autowired
-    private PublicService publicService;
+    private final PublicService publicService;
 
     @PostMapping("/register")
     @Operation(summary = "Registration for the first time visiting people", description = "Allows users to register by providing name, email, password and role.")

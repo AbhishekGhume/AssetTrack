@@ -10,6 +10,7 @@ import com.abhishek.asset_manager.model.User;
 import com.abhishek.asset_manager.repository.AssetRepo;
 import com.abhishek.asset_manager.repository.RequestRepo;
 import com.abhishek.asset_manager.repository.UserRepo;
+import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
@@ -22,9 +23,10 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class AssetService {
-    @Autowired
-    private AssetRepo assetRepo;
+
+    private final AssetRepo assetRepo;
 
     public List<AssetResponseDto> getAllAssets() {
         return assetRepo.findAll()

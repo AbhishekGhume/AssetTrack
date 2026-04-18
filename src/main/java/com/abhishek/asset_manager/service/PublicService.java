@@ -8,6 +8,7 @@ import com.abhishek.asset_manager.exceptions.UserNotExistsException;
 import com.abhishek.asset_manager.model.Role;
 import com.abhishek.asset_manager.model.User;
 import com.abhishek.asset_manager.repository.UserRepo;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -19,19 +20,13 @@ import org.springframework.stereotype.Service;
 import java.util.Set;
 
 @Service
+@RequiredArgsConstructor
 public class PublicService {
 
-    @Autowired
-    private UserRepo userRepo;
-
-    @Autowired
-    private AuthenticationManager authenticationManager;
-
-    @Autowired
-    private UserDetailServiceImpl userDetailService;
-
-    @Autowired
-    private JwtUtil jwtUtil;
+    private final UserRepo userRepo;
+    private final AuthenticationManager authenticationManager;
+    private final UserDetailServiceImpl userDetailService;
+    private final JwtUtil jwtUtil;
 
     private static final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 

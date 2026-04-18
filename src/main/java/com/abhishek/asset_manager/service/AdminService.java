@@ -10,6 +10,7 @@ import com.abhishek.asset_manager.model.Role;
 import com.abhishek.asset_manager.model.User;
 import com.abhishek.asset_manager.repository.AssetRepo;
 import com.abhishek.asset_manager.repository.UserRepo;
+import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,15 +27,12 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class AdminService {
-    @Autowired
-    private UserRepo userRepo;
 
-    @Autowired
-    private AssetRepo assetRepo;
-
-    @Autowired
-    private S3Client s3Client;
+    private final UserRepo userRepo;
+    private final AssetRepo assetRepo;
+    private final S3Client s3Client;
 
     @Value("${cloud.aws.s3.bucket}")
     private String bucketName;

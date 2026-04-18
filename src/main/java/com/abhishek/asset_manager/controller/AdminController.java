@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -22,9 +23,10 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin")
 @Tag(name = "Admin APIs", description = "create and see users")
+@RequiredArgsConstructor
 public class AdminController {
-    @Autowired
-    private AdminService adminService;
+
+    private final AdminService adminService;
 
     @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Create asset with image",

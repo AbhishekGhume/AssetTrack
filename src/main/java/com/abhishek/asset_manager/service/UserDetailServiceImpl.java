@@ -3,6 +3,7 @@ package com.abhishek.asset_manager.service;
 import com.abhishek.asset_manager.exceptions.UserNotExistsException;
 import com.abhishek.asset_manager.model.User;
 import com.abhishek.asset_manager.repository.UserRepo;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -14,10 +15,10 @@ import java.util.Collections;
 import java.util.stream.Collectors;
 
 @Component
+@RequiredArgsConstructor
 public class UserDetailServiceImpl implements UserDetailsService {
 
-    @Autowired
-    private UserRepo userRepo;
+    private final UserRepo userRepo;
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {

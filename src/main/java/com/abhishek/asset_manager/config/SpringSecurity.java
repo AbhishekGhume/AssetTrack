@@ -2,6 +2,7 @@ package com.abhishek.asset_manager.config;
 
 import com.abhishek.asset_manager.model.Role;
 import com.abhishek.asset_manager.service.UserDetailServiceImpl;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,12 +21,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @EnableWebSecurity
 @Configuration
+@RequiredArgsConstructor
 public class SpringSecurity {
-    @Autowired
-    private UserDetailServiceImpl userDetailService;
 
-    @Autowired
-    private JwtFilter jwtFilter;
+    private final UserDetailServiceImpl userDetailService;
+    private final JwtFilter jwtFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {

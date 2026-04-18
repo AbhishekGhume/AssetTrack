@@ -7,6 +7,7 @@ import com.abhishek.asset_manager.model.*;
 import com.abhishek.asset_manager.repository.AssetRepo;
 import com.abhishek.asset_manager.repository.RequestRepo;
 import com.abhishek.asset_manager.repository.UserRepo;
+import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
@@ -19,16 +20,12 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 @Service
+@RequiredArgsConstructor
 public class EmployeeService {
 
-    @Autowired
-    private UserRepo userRepo;
-
-    @Autowired
-    private RequestRepo requestRepo;
-
-    @Autowired
-    private AssetRepo assetRepo;
+    private final UserRepo userRepo;
+    private final RequestRepo requestRepo;
+    private final AssetRepo assetRepo;
 
     public List<RequestResponseDto> getAllRequests() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
