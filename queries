@@ -1,0 +1,294 @@
+// Customers Table
+
+USE [XmlMiddlewareDb]
+GO
+
+/****** Object:  Table [dbo].[Customers]    Script Date: 26-09-2026 12:53:39 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[Customers](
+	[CustomerSK] [bigint] IDENTITY(1,1) NOT NULL,
+	[CustomerId] [nvarchar](100) NOT NULL,
+	[FirstName] [nvarchar](100) NOT NULL,
+	[LastName] [nvarchar](100) NOT NULL,
+	[Email] [nvarchar](255) NOT NULL,
+	[CreatedDate] [datetime2](7) NOT NULL,
+	[ModifiedDate] [datetime2](7) NULL,
+ CONSTRAINT [PK_Customers] PRIMARY KEY CLUSTERED 
+(
+	[CustomerSK] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+
+
+
+
+
+// OrderDetails Table
+
+USE [XmlMiddlewareDb]
+GO
+
+/****** Object:  Table [dbo].[OrderDetails]    Script Date: 26-09-2026 12:54:50 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[OrderDetails](
+	[OrderDetailSK] [bigint] IDENTITY(1,1) NOT NULL,
+	[OrderSK] [bigint] NOT NULL,
+	[LineNumber] [int] NOT NULL,
+	[ProductSK] [bigint] NOT NULL,
+	[Quantity] [int] NOT NULL,
+	[UnitPrice] [decimal](18, 2) NOT NULL,
+	[LineTotal]  AS (CONVERT([decimal](18,2),[Quantity])*[UnitPrice]) PERSISTED,
+ CONSTRAINT [PK_OrderDetails] PRIMARY KEY CLUSTERED 
+(
+	[OrderDetailSK] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[OrderDetails]  WITH CHECK ADD  CONSTRAINT [FK_OrderDetails_Orders] FOREIGN KEY([OrderSK])
+REFERENCES [dbo].[Orders] ([OrderSK])
+ON DELETE CASCADE
+GO
+
+ALTER TABLE [dbo].[OrderDetails] CHECK CONSTRAINT [FK_OrderDetails_Orders]
+GO
+
+ALTER TABLE [dbo].[OrderDetails]  WITH CHECK ADD  CONSTRAINT [FK_OrderDetails_Products] FOREIGN KEY([ProductSK])
+REFERENCES [dbo].[Products] ([ProductSK])
+ON DELETE CASCADE
+GO
+
+ALTER TABLE [dbo].[OrderDetails] CHECK CONSTRAINT [FK_OrderDetails_Products]
+GO
+
+
+
+
+
+
+// Orders Table
+
+USE [XmlMiddlewareDb]
+GO
+
+/****** Object:  Table [dbo].[Orders]    Script Date: 26-09-2026 12:55:33 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[Orders](
+	[OrderSK] [bigint] IDENTITY(1,1) NOT NULL,
+	[OrderId] [nvarchar](100) NOT NULL,
+	[BatchId] [bigint] NOT NULL,
+	[CustomerSK] [bigint] NOT NULL,
+	[OrderDate] [date] NOT NULL,
+	[AddressLine1] [nvarchar](max) NOT NULL,
+	[City] [nvarchar](max) NOT NULL,
+	[PostCode] [nvarchar](max) NOT NULL,
+	[Country] [nvarchar](max) NOT NULL,
+	[CreatedDate] [datetime2](7) NOT NULL,
+ CONSTRAINT [PK_Orders] PRIMARY KEY CLUSTERED 
+(
+	[OrderSK] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[Orders]  WITH CHECK ADD  CONSTRAINT [FK_Orders_Customers] FOREIGN KEY([CustomerSK])
+REFERENCES [dbo].[Customers] ([CustomerSK])
+ON DELETE CASCADE
+GO
+
+ALTER TABLE [dbo].[Orders] CHECK CONSTRAINT [FK_Orders_Customers]
+GO
+
+
+
+
+
+// OutputFiles Table
+
+USE [XmlMiddlewareDb]
+GO
+
+/****** Object:  Table [dbo].[OutputFiles]    Script Date: 26-09-2026 12:55:52 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[OutputFiles](
+	[OutputFileId] [bigint] IDENTITY(1,1) NOT NULL,
+	[BatchId] [bigint] NOT NULL,
+	[OutputType] [nvarchar](50) NOT NULL,
+	[Status] [nvarchar](50) NOT NULL,
+	[AttemptCount] [int] NOT NULL,
+	[OutputBlobPath] [nvarchar](1000) NULL,
+	[StartedDateTime] [datetime2](7) NULL,
+	[CompletedDateTime] [datetime2](7) NULL,
+	[ErrorCode] [nvarchar](100) NULL,
+	[ErrorMessage] [nvarchar](2000) NULL,
+	[CreatedDateTime] [datetime2](7) NOT NULL,
+	[UpdatedDateTime] [datetime2](7) NOT NULL,
+ CONSTRAINT [PK_OutputFiles] PRIMARY KEY CLUSTERED 
+(
+	[OutputFileId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+
+
+
+
+
+
+// ProcessingBatches Table
+
+USE [XmlMiddlewareDb]
+GO
+
+/****** Object:  Table [dbo].[ProcessingBatches]    Script Date: 26-09-2026 12:56:17 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[ProcessingBatches](
+	[BatchId] [bigint] IDENTITY(1,1) NOT NULL,
+	[CorrelationId] [uniqueidentifier] NOT NULL,
+	[FileName] [nvarchar](500) NOT NULL,
+	[BlobPath] [nvarchar](1000) NOT NULL,
+	[OriginalBlobPath] [nvarchar](1000) NOT NULL,
+	[FileHash] [nvarchar](64) NULL,
+	[Status] [nvarchar](50) NOT NULL,
+	[CurrentStep] [nvarchar](100) NOT NULL,
+	[RetryCount] [int] NOT NULL,
+	[LastRetryDateTime] [datetime2](7) NULL,
+	[RecordCount] [int] NOT NULL,
+	[InvalidRecordCount] [int] NOT NULL,
+	[ReceivedDateTime] [datetime2](7) NOT NULL,
+	[ProcessingStartDateTime] [datetime2](7) NULL,
+	[ProcessingEndDateTime] [datetime2](7) NULL,
+	[ErrorCode] [nvarchar](100) NULL,
+	[ErrorMessage] [nvarchar](2000) NULL,
+	[OriginalBatchId] [bigint] NULL,
+	[DuplicateCase] [nvarchar](50) NULL,
+	[RedriveCount] [int] NOT NULL,
+	[LastRedriveDateTime] [datetime2](7) NULL,
+	[CreatedDateTime] [datetime2](7) NOT NULL,
+	[UpdatedDateTime] [datetime2](7) NOT NULL,
+ CONSTRAINT [PK_ProcessingBatches] PRIMARY KEY CLUSTERED 
+(
+	[BatchId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[ProcessingBatches] ADD  CONSTRAINT [DF_ProcessingBatches_RedriveCount]  DEFAULT ((0)) FOR [RedriveCount]
+GO
+
+ALTER TABLE [dbo].[ProcessingBatches]  WITH CHECK ADD  CONSTRAINT [FK_ProcessingBatches_OriginalBatch] FOREIGN KEY([OriginalBatchId])
+REFERENCES [dbo].[ProcessingBatches] ([BatchId])
+GO
+
+ALTER TABLE [dbo].[ProcessingBatches] CHECK CONSTRAINT [FK_ProcessingBatches_OriginalBatch]
+GO
+
+
+
+
+
+
+
+
+// ProcessingEvents Table
+
+USE [XmlMiddlewareDb]
+GO
+
+/****** Object:  Table [dbo].[ProcessingEvents]    Script Date: 26-09-2026 12:56:38 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[ProcessingEvents](
+	[EventId] [bigint] IDENTITY(1,1) NOT NULL,
+	[BatchId] [bigint] NOT NULL,
+	[OutputFileId] [bigint] NULL,
+	[CorrelationId] [uniqueidentifier] NOT NULL,
+	[FileName] [nvarchar](500) NOT NULL,
+	[EventType] [nvarchar](50) NOT NULL,
+	[Status] [nvarchar](100) NOT NULL,
+	[FromState] [nvarchar](100) NULL,
+	[ToState] [nvarchar](100) NULL,
+	[Message] [nvarchar](4000) NOT NULL,
+	[ErrorCode] [nvarchar](100) NULL,
+	[ErrorMessage] [nvarchar](4000) NULL,
+	[FunctionName] [nvarchar](200) NOT NULL,
+	[AttemptNumber] [int] NOT NULL,
+	[CreatedDateTime] [datetime2](7) NOT NULL,
+	[UpdatedDateTime] [datetime2](7) NOT NULL,
+ CONSTRAINT [PK_ProcessingEvents] PRIMARY KEY CLUSTERED 
+(
+	[EventId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[ProcessingEvents]  WITH CHECK ADD  CONSTRAINT [FK_ProcessingEvents_OutputFiles] FOREIGN KEY([OutputFileId])
+REFERENCES [dbo].[OutputFiles] ([OutputFileId])
+GO
+
+ALTER TABLE [dbo].[ProcessingEvents] CHECK CONSTRAINT [FK_ProcessingEvents_OutputFiles]
+GO
+
+
+
+
+
+
+
+// Products Table
+
+USE [XmlMiddlewareDb]
+GO
+
+/****** Object:  Table [dbo].[Products]    Script Date: 26-09-2026 12:57:02 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[Products](
+	[ProductSK] [bigint] IDENTITY(1,1) NOT NULL,
+	[ProductCode] [nvarchar](100) NOT NULL,
+	[ProductName] [nvarchar](200) NOT NULL,
+	[CreatedDate] [datetime2](7) NOT NULL,
+	[ModifiedDate] [datetime2](7) NULL,
+ CONSTRAINT [PK_Products] PRIMARY KEY CLUSTERED 
+(
+	[ProductSK] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
