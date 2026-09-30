@@ -1,0 +1,78 @@
+Scenario A — SQL present, output files gone
+
+A1. Basic regeneration via duplicate upload (the trigger you designed)
+
+Setup: Upload a valid XML file, let it reach Completed. Note its BatchId.
+Action: Manually delete the entire output/ folder for that batch from Blob Storage (or just delete the Json and Pdf subfolders, to test partial loss too).
+Trigger: Re-upload the exact same file (same bytes → same hash).
+Expect: CheckDuplicateAsync finds AlreadyCompleted, calls RegenerateMissingOutputsAsync, and you should see the missing formats reappear in output/. Check ProcessingEvent for a new OutputsRegeneratedFromDatabase row against the original BatchId, not the duplicate upload's new batch row.
+
+A2. Only one format missing
+
+Same as A1, but delete only the Dat folder, leaving the other five intact.
+Expect: only Dat gets regenerated; verify the other five OutputFile rows are untouched (their CompletedDateTime/AttemptCount shouldn't change) — this confirms the "only touch what's actually missing" logic in RegenerateMissingOutputsAsync, not a blanket regenerate-everything.
+
+A3. Regeneration via the timer sweep, not the duplicate trigger
+
+Setup: Same as A1 (delete outputs from a completed batch).
+Action: Don't re-upload anything. Just manually invoke RecoveryFunction.Run (or wait for the 2-hour timer, or temporarily shorten the cron to */1 * * * * for testing).
+Expect: the sweep finds it independently and fixes it — this is the proactive path, proving you're not dependent on someone re-uploading.
+
+A4. Missing folder vs. empty folder
+
+Delete just the files inside a per-order format's folder but leave the (now-empty) folder blob prefix conceptually "existing." In Blob Storage there's no real empty folder, but test this by deleting all blobs under that prefix — ListAsync should return 0 items either way, and OutputPhysicallyExistsAsync should correctly treat that as missing.
+
+A5. XLSX specifically (single-file path, not per-order)
+
+Delete only the one .xlsx file for a completed batch.
+Expect: RegenerateOneFormatAsync's Xlsx branch runs (not the per-order loop), producing one file with one sheet per order, and the new path lands under output/ directly, not a subfolder.
+Scenario B — output files present, SQL gone
+
+B1. Full SQL wipe for one batch
+
+Setup: Process a file to Completed. Note its CorrelationId.
+Action: Manually delete its rows: Order, OrderDetail (for that batch's orders), and the ProcessingBatch row itself. Leave output/ untouched.
+Trigger: Call RestoreFromOutputFilesAsync(correlationId) directly (or run the sweep).
+Expect: a new ProcessingBatch row is created (new BatchId, same CorrelationId), CurrentStep = RestoredFromOutputFiles, orders reappear in Order/OrderDetail/Customer/Product, and OutputFile rows get recreated — Success for formats it found, Pending for any it didn't.
+
+B2. Batch row exists, but orders are gone (partial SQL loss)
+
+Delete only Order/OrderDetail rows, but leave the ProcessingBatch row itself intact.
+Expect: RestoreFromOutputFilesAsync finds the existing batch via GetByCorrelationIdAsync (doesn't create a duplicate one), and calls PersistOrdersAsync against that same BatchId. This is the more realistic "something corrupted just the order tables" case, worth testing separately from the full-wipe case.
+
+B3. Customer/Product rows survive, only Order/OrderDetail gone
+
+A variant of B2: leave Customer and Product rows in place, delete only Order/OrderDetail.
+Expect: PersistOrdersAsync's existing GetOrCreateCustomerAsync/GetOrCreateProductAsync logic finds the existing customer/product by natural key and reuses them rather than erroring — this is really testing that your existing idempotent persistence code handles a "half-restored" world correctly, not new reconciliation code.
+
+B4. Recovery when only some JSON files survive
+
+Delete some, but not all, of the per-order JSON files for a batch, then wipe its SQL rows.
+Expect: partial recovery — only the orders whose JSON files survived come back. This is an important one to actually see happen, since it's a real limitation of the design (recovery quality is bounded by what JSON survived), not a bug.
+
+B5. No JSON files at all — the documented failure case
+
+Delete the entire Json folder for a batch (but leave Txt/Csv/Pdf/etc.), then wipe SQL.
+Expect: RestoreFromOutputFilesAsync returns Success = false, Reason = "No JSON output files were found...". This confirms the method fails cleanly and explains why, rather than silently doing nothing or throwing.
+Negative / "don't do anything" tests — arguably the most important category
+
+N1. Everything is fine — sweep should be a no-op
+
+Run RunFullSweepAsync against a completely healthy set of batches (nothing deleted anywhere).
+Expect: OutputsRegenerated = 0, BatchesRestored = 0, Errors empty. If this touches anything at all, that's a bug — the sweep should be silent on a healthy system.
+
+N2. Batch that never finished shouldn't trigger Scenario A
+
+Leave a batch in Rejected, ValidationFailed, or Duplicate status with no output files at all (which is correct and expected for those statuses).
+Call RegenerateMissingOutputsAsync on it directly.
+Expect: returns 0 immediately — the Status != Completed && Status != PartialSuccess guard should stop it before it even looks at output files.
+
+N3. Re-running reconciliation twice should be idempotent
+
+Do A1, let it regenerate successfully. Then immediately trigger the exact same reconciliation again (call RegenerateMissingOutputsAsync a second time, or run the sweep twice in a row).
+Expect: the second run finds all six formats present now and does nothing — no duplicate files, no duplicate ProcessingEvent rows, AttemptCount doesn't increment again.
+
+N4. Restoring a batch that already fully exists
+
+Call RestoreFromOutputFilesAsync on a CorrelationId whose batch and orders are both completely intact.
+Expect: it still runs (nothing stops it from being called), but PersistOrdersAsync's own idempotency guard (alreadyPersisted check) returns Skipped, so OrdersRestored comes back as 0 and nothing gets duplicated.
