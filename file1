@@ -1,0 +1,33 @@
+namespace XmlMiddleware.Application.Interfaces.Services;
+
+using XmlMiddleware.Application.Models;
+
+public interface IOutputReconciliationService
+{
+    /// <summary>
+    /// Scenario A: the database says this batch completed and has orders, but one or more
+    /// of its output files/folders are missing from blob storage. Rebuilds only the missing
+    /// formats directly from the persisted Order/Customer/Product data.
+    /// </summary>
+    /// <returns>How many output formats were regenerated (0 if nothing was missing).</returns>
+    Task<int> RegenerateMissingOutputsAsync(
+        long batchId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Scenario B: output files exist in blob storage (identified by their own metadata,
+    /// not by a database lookup) but the batch/orders no longer exist in SQL. Rebuilds the
+    /// ProcessingBatch row (if missing) and the Customer/Product/Order/OrderDetail rows from
+    /// the surviving per-order JSON output files.
+    /// </summary>
+    Task<ReconciliationResult> RestoreFromOutputFilesAsync(
+        Guid correlationId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks both directions across recent batches / all tagged output blobs and repairs
+    /// whatever is out of sync. Intended to be called on a schedule.
+    /// </summary>
+    Task<ReconciliationSweepResult> RunFullSweepAsync(
+        CancellationToken cancellationToken = default);
+}
