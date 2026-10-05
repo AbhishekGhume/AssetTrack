@@ -1,10 +1,11 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using XmlMiddleware.Application.Configuration;
 using XmlMiddleware.Application.Interfaces.Repositories;
 using XmlMiddleware.Application.Interfaces.Services;
 using XmlMiddleware.Application.Models;
+using XmlMiddleware.Domain.Constants;
 using XmlMiddleware.Domain.Entities;
 using XmlMiddleware.Domain.Enums;
 using XmlMiddleware.Persistence.Context;
@@ -12,22 +13,29 @@ using XmlMiddleware.Persistence.Context;
 namespace XmlMiddleware.Infrastructure.Reconciliation;
 
 /// <summary>
-/// Scenario A reconciliation only: SQL says a batch completed and has its orders, but one or
-/// more output formats are missing from blob storage (deleted by accident, storage issue,
-/// etc.). Rebuilds just the missing formats from the persisted Order/Customer/Product data,
-/// using EXACTLY the same folder/file naming the original run would have used, so the files
-/// land back inside the batch's existing output folder rather than a new one.
+/// Brings SQL and Blob Storage back in line when one side lost something. Runs only when a
+/// file is uploaded again (see IOutputReconciliationService), never on a schedule.
 ///
-/// This is only invoked reactively, from ProcessingFunction.CheckDuplicateAsync, when a
-/// duplicate upload of an already-completed file is detected. There is no scheduled sweep.
+/// Rules that keep it safe to run repeatedly:
+///   * It only ever CREATES what is missing. Existing files and rows are never overwritten.
+///   * Regenerated files use the original batch's folder, timestamp and naming, so the result is
+///     identical to what the normal pipeline would have produced (no stray duplicates).
+///   * SQL is the source for outputs; the re-uploaded XML (same hash = same bytes) is the source
+///     for orders.
 /// </summary>
 public class OutputReconciliationService : IOutputReconciliationService
 {
+    private const string TimestampFormat = "yyyyMMddHHmmssfff";
+    private const int TimestampLength = 17;
+
     private readonly ApplicationDbContext _context;
     private readonly IProcessingBatchRepository _batchRepository;
     private readonly IOutputFileRepository _outputFileRepository;
     private readonly IBlobStorageService _blobStorageService;
     private readonly IFileGeneratorService _fileGeneratorService;
+    private readonly IOrderPersistenceService _orderPersistenceService;
+    private readonly IXmlMapperService _xmlMapperService;
+    private readonly IXmlValidationService _xmlValidationService;
     private readonly IAuditService _auditService;
     private readonly ProcessingFolders _folders;
     private readonly ILogger<OutputReconciliationService> _logger;
@@ -38,6 +46,9 @@ public class OutputReconciliationService : IOutputReconciliationService
         IOutputFileRepository outputFileRepository,
         IBlobStorageService blobStorageService,
         IFileGeneratorService fileGeneratorService,
+        IOrderPersistenceService orderPersistenceService,
+        IXmlMapperService xmlMapperService,
+        IXmlValidationService xmlValidationService,
         IAuditService auditService,
         ProcessingFolders folders,
         ILogger<OutputReconciliationService> logger)
@@ -47,114 +58,146 @@ public class OutputReconciliationService : IOutputReconciliationService
         _outputFileRepository = outputFileRepository;
         _blobStorageService = blobStorageService;
         _fileGeneratorService = fileGeneratorService;
+        _orderPersistenceService = orderPersistenceService;
+        _xmlMapperService = xmlMapperService;
+        _xmlValidationService = xmlValidationService;
         _auditService = auditService;
         _folders = folders;
         _logger = logger;
     }
 
-    public async Task<int> RegenerateMissingOutputsAsync(
-        long batchId, CancellationToken ct = default)
+    private string OutputPrefix => _folders.Output.Trim('/') + "/";
+
+    // =====================================================================
+    // TRIGGER 1: same file uploaded again, earlier batch Completed/PartialSuccess
+    // =====================================================================
+
+    public async Task<ReconciliationResult> ReconcileCompletedBatchAsync(
+        long batchId, Stream uploadedXml, CancellationToken ct = default)
     {
         var batch = await _batchRepository.GetByIdAsync(batchId, ct);
 
         if (batch is null)
         {
-            _logger.LogWarning(
-                "Reconciliation: batch {BatchId} not found - cannot check its outputs.", batchId);
-            return 0;
+            return Failed(batchId, $"Batch {batchId} was not found.");
         }
 
-        if (batch.Status != BatchStatus.Completed && batch.Status != BatchStatus.PartialSuccess)
+        if (batch.Status is not (BatchStatus.Completed or BatchStatus.PartialSuccess))
         {
-            _logger.LogInformation(
-                "Reconciliation: batch {BatchId} ({Status}) never finished successfully - nothing to regenerate.",
-                batchId, batch.Status);
-            return 0;
+            return Failed(batchId, $"Batch {batchId} is {batch.Status}; only finished batches are reconciled.");
         }
 
-        var outputs = await _outputFileRepository.GetByBatchIdAsync(batchId, ct);
-        var missing = new List<OutputFile>();
+        var result = new ReconciliationResult { Success = true, BatchId = batchId };
 
-        foreach (var output in outputs)
-        {
-            if (output.Status != OutputStatus.Success || !await OutputPhysicallyExistsAsync(output, ct))
-            {
-                missing.Add(output);
-            }
-        }
+        // ---- step 1: DATA (SQL lost orders, the XML still has them) -------------
+        result.OrdersRestored = await RestoreMissingOrdersAsync(batch, uploadedXml, ct);
 
-        if (missing.Count == 0)
-        {
-            _logger.LogInformation(
-                "Reconciliation: batch {BatchId} ({FileName}) - all {Count} output format(s) are present. Nothing to do.",
-                batchId, batch.FileName, outputs.Count);
-            return 0;
-        }
-
-        _logger.LogWarning(
-            "Reconciliation: batch {BatchId} ({FileName}) is missing {Count} output format(s) on disk that SQL says should exist: {Types}. Regenerating from the database.",
-            batchId, batch.FileName, missing.Count, string.Join(", ", missing.Select(o => o.OutputType)));
-
+        // ---- step 2: OUTPUTS (blob storage lost files, SQL still has the orders) -
         var orders = await LoadOrdersFromDatabaseAsync(batchId, ct);
 
         if (orders.Count == 0)
         {
-            _logger.LogError(
-                "Reconciliation: batch {BatchId} has no orders in the database - cannot regenerate its outputs.",
-                batchId);
+            result.Success = false;
+            result.Reason = "The batch has no orders in SQL and none could be restored from the uploaded file.";
+
+            _logger.LogError("Reconciliation: batch {BatchId} has no orders - outputs cannot be rebuilt.", batchId);
+            return result;
+        }
+
+        await EnsureOutputsAsync(batch, orders, result, ct);
+
+        if (result.AnythingRepaired)
+        {
+            _logger.LogWarning(
+                "Reconciliation: batch {BatchId} repaired | OrdersRestored={Orders} | FilesRegenerated={Files} | Formats={Formats}",
+                batchId, result.OrdersRestored, result.OutputFilesRegenerated,
+                string.Join(", ", result.FormatsRepaired));
+        }
+
+        return result;
+    }
+
+    // ---------------------------------------------------------------------
+    // step 1 - data
+    // ---------------------------------------------------------------------
+
+    private async Task<int> RestoreMissingOrdersAsync(
+        ProcessingBatch batch, Stream uploadedXml, CancellationToken ct)
+    {
+        var uploaded = await ReadValidOrdersAsync(uploadedXml, ct);
+
+        if (uploaded.Count == 0)
+        {
             return 0;
         }
 
-        foreach (var output in missing)
-        {
-            await RegenerateOneFormatAsync(batch, output, orders, ct);
+        // An order counts as present when ANY batch holds it (OrderId is globally unique).
+        // Orders that exist elsewhere, or were refused by a business rule, are not "missing".
+        var uploadedIds = uploaded.Select(o => o.OrderId).ToList();
 
-            _logger.LogInformation(
-                "Reconciliation: regenerated {OutputType} for batch {BatchId} -> {Path}",
-                output.OutputType, batchId, output.OutputBlobPath);
+        var presentIds = await _context.Orders
+            .AsNoTracking()
+            .Where(o => uploadedIds.Contains(o.OrderId))
+            .Select(o => o.OrderId)
+            .ToListAsync(ct);
+
+        var present = new HashSet<string>(presentIds, StringComparer.OrdinalIgnoreCase);
+
+        var missing = uploaded
+            .Where(o => !present.Contains(o.OrderId))
+            .ToList();
+
+        if (missing.Count == 0)
+        {
+            return 0;
         }
 
-        await _outputFileRepository.SaveChangesAsync(ct);
+        _logger.LogWarning(
+            "Reconciliation: batch {BatchId} is missing {Count} order(s) in SQL - re-creating them from the uploaded file.",
+            batch.BatchId, missing.Count);
 
-        await _auditService.LogEventAsync(
-            batchId,
-            batch.CorrelationId,
-            batch.FileName,
-            EventType.OutputsRegeneratedFromDatabase,
-            "Success",
-            $"{missing.Count} output format(s) ({string.Join(", ", missing.Select(o => o.OutputType))}) were missing from blob storage and were regenerated from the database.",
-            nameof(OutputReconciliationService),
-            batch.CurrentStep,
-            batch.CurrentStep,
-            0,
-            null,
-            null,
-            null,
-            ct);
+        var persisted = await _orderPersistenceService.PersistOrdersAsync(
+            batch.BatchId, batch.CorrelationId, batch.FileName, batch.FileHash,
+            missing, ct, restoreMode: true);
 
-        _logger.LogInformation(
-            "Reconciliation: finished for batch {BatchId} - {Count} output format(s) regenerated.",
-            batchId, missing.Count);
+        foreach (var failed in persisted.FailedOrders)
+        {
+            _logger.LogWarning(
+                "Reconciliation: order {OrderId} could not be restored: {Reason}",
+                failed.OrderId, failed.Reason);
+        }
 
-        return missing.Count;
+        if (persisted.OrdersInserted > 0)
+        {
+            await AuditAsync(
+                batch, EventType.OrdersRestoredFromSourceFile,
+                $"{persisted.OrdersInserted} order(s) were missing in SQL and were re-created from the re-uploaded file " +
+                $"({persisted.CustomersInserted} customer(s), {persisted.ProductsInserted} product(s), {persisted.OrderLinesInserted} line(s)).",
+                ct);
+        }
+
+        return persisted.OrdersInserted;
     }
 
-    private async Task<bool> OutputPhysicallyExistsAsync(OutputFile output, CancellationToken ct)
+    /// <summary>Maps the XML and keeps only the orders that pass validation (same rule as the pipeline).</summary>
+    private async Task<List<CanonicalOrderModel>> ReadValidOrdersAsync(Stream xml, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(output.OutputBlobPath))
+        xml.Position = 0;
+        var validation = await _xmlValidationService.ValidateAsync(xml, ct);
+
+        xml.Position = 0;
+        var mapped = await _xmlMapperService.MapAsync(xml, ct);
+
+        xml.Position = 0;
+
+        if (validation.ValidRecordNumbers.Count == 0)
         {
-            return false;
+            return [];
         }
 
-        var relativePath = _folders.ToRelativePath(output.OutputBlobPath);
-
-        if (output.OutputType == OutputType.Xlsx)
-        {
-            return await _blobStorageService.ExistsAsync(relativePath, ct);
-        }
-
-        var files = await _blobStorageService.ListAsync(relativePath, ct);
-        return files.Count > 0;
+        return mapped
+            .Where((_, index) => validation.ValidRecordNumbers.Contains(index + 1))
+            .ToList();
     }
 
     private async Task<List<CanonicalOrderModel>> LoadOrdersFromDatabaseAsync(long batchId, CancellationToken ct)
@@ -165,6 +208,7 @@ public class OutputReconciliationService : IOutputReconciliationService
             .Include(o => o.OrderDetails)
                 .ThenInclude(d => d.Product)
             .AsNoTracking()
+            .OrderBy(o => o.OrderSK)
             .ToListAsync(ct);
 
         return orders.Select(o => new CanonicalOrderModel
@@ -192,58 +236,397 @@ public class OutputReconciliationService : IOutputReconciliationService
         }).ToList();
     }
 
-    /// <summary>
-    /// Rebuilds a missing format using EXACTLY the folder/file naming the normal pipeline
-    /// would have used for this batch (same ReceivedDateTime-based timestamp, same
-    /// safe-filename rules). This is what puts the regenerated files back inside the SAME
-    /// parent folder as the formats that survived, with no "recovered" wording anywhere -
-    /// and it's also naturally idempotent, since calling it twice produces the same paths.
-    /// </summary>
-    private async Task RegenerateOneFormatAsync(
-        ProcessingBatch batch, OutputFile output, List<CanonicalOrderModel> orders, CancellationToken ct)
+    // ---------------------------------------------------------------------
+    // step 2 - outputs
+    // ---------------------------------------------------------------------
+
+    private async Task EnsureOutputsAsync(
+        ProcessingBatch batch,
+        List<CanonicalOrderModel> orders,
+        ReconciliationResult result,
+        CancellationToken ct)
     {
-        var safeFileName = MakeSafeFileName(Path.GetFileNameWithoutExtension(batch.FileName));
-        var timestamp = batch.ReceivedDateTime.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture);
+        var rows = await _outputFileRepository.GetByBatchIdAsync(batch.BatchId, ct);
 
-        // Same shared parent folder the original run used for every format of this batch.
-        var outputFolderName = $"{safeFileName}_{timestamp}";
-
-        if (output.OutputType == OutputType.Xlsx)
+        foreach (var outputType in Enum.GetValues<OutputType>().OrderBy(t => (int)t))
         {
-            using var generated = await _fileGeneratorService.GenerateAsync(orders, OutputType.Xlsx, ct);
+            var row = rows.FirstOrDefault(r => r.OutputType == outputType);
 
-            var relativePath = $"{_folders.Output.Trim('/')}/{outputFolderName}/{outputFolderName}.xlsx";
-
-            await _blobStorageService.UploadAsync(generated, relativePath, ct);
-            output.OutputBlobPath = _folders.ToFullPath(relativePath);
-        }
-        else
-        {
-            var extension = output.OutputType.ToString().ToLowerInvariant();
-            var formatFolderName = $"{output.OutputType.ToString().ToUpperInvariant()}_{safeFileName}_{timestamp}";
-            var formatFolderPath = $"{_folders.Output.Trim('/')}/{outputFolderName}/{formatFolderName}";
-
-            foreach (var order in orders)
+            if (row is null)
             {
-                using var generated = await _fileGeneratorService.GenerateAsync([order], output.OutputType, ct);
+                // The OutputFile row itself was lost - recreate it so the format is tracked again.
+                row = new OutputFile
+                {
+                    BatchId = batch.BatchId,
+                    OutputType = outputType,
+                    Status = OutputStatus.Pending
+                };
 
-                var safeOrderId = MakeSafeFileName(order.OrderId);
-                var outputFileName = $"{safeOrderId}_{safeFileName}_{timestamp}.{extension}";
-                var relativePath = $"{formatFolderPath}/{outputFileName}";
-
-                await _blobStorageService.UploadAsync(generated, relativePath, ct);
+                await _outputFileRepository.AddAsync(row, ct);
+                rows.Add(row);
             }
 
-            output.OutputBlobPath = _folders.ToFullPath($"{formatFolderPath}/");
+            var created = outputType == OutputType.Xlsx
+                ? await EnsureWorkbookAsync(batch, row, orders, ct)
+                : await EnsurePerOrderFilesAsync(batch, row, orders, ct);
+
+            if (created > 0)
+            {
+                result.OutputFilesRegenerated += created;
+                result.FormatsRepaired.Add(outputType);
+            }
         }
 
-        output.Status = OutputStatus.Success;
-        output.AttemptCount++;
-        output.CompletedDateTime = DateTime.UtcNow;
-        output.ErrorCode = null;
-        output.ErrorMessage = null;
+        await _outputFileRepository.SaveChangesAsync(ct);
+
+        if (result.OutputFilesRegenerated > 0)
+        {
+            await AuditAsync(
+                batch, EventType.OutputsRegeneratedFromDatabase,
+                $"{result.OutputFilesRegenerated} output file(s) were missing from blob storage and were regenerated from SQL. " +
+                $"Formats: {string.Join(", ", result.FormatsRepaired)}.",
+                ct);
+        }
     }
 
+    /// <summary>XLSX = one workbook for the whole batch.</summary>
+    private async Task<int> EnsureWorkbookAsync(
+        ProcessingBatch batch, OutputFile row, List<CanonicalOrderModel> orders, CancellationToken ct)
+    {
+        // Same naming as ProcessingFunction.GenerateOutputAsync (+ the publish move to output/).
+        var baseName = Path.GetFileNameWithoutExtension(batch.FileName);
+        var outputName = $"{baseName}_{Timestamp(batch)}";
+        var canonical = $"{OutputPrefix}{HashPrefix(batch)}_{outputName}/{outputName}.xlsx";
+        var legacyCanonical = $"{OutputPrefix}{outputName}/{outputName}.xlsx";   // files made before hash naming
+
+        var recorded = RecordedFinalPath(row);
+
+        var candidates = new List<string>();
+        if (recorded is not null) candidates.Add(recorded);
+        foreach (var p in new[] { canonical, legacyCanonical })
+        {
+            if (!candidates.Contains(p, StringComparer.OrdinalIgnoreCase)) candidates.Add(p);
+        }
+
+        foreach (var candidate in candidates)
+        {
+            if (await _blobStorageService.ExistsAsync(candidate, ct))
+            {
+                MarkSuccess(row, candidate);
+                return 0;
+            }
+        }
+
+        var target = recorded ?? canonical;
+
+        using var generated = await _fileGeneratorService.GenerateAsync(orders, OutputType.Xlsx, ct);
+
+        await _blobStorageService.UploadAsync(
+            generated, target, BuildMetadata(batch, OutputType.Xlsx, null), ct);
+
+        MarkSuccess(row, target);
+        return 1;
+    }
+
+    /// <summary>TXT/CSV/JSON/DAT/PDF = one file per order inside one folder per format.</summary>
+    private async Task<int> EnsurePerOrderFilesAsync(
+        ProcessingBatch batch, OutputFile row, List<CanonicalOrderModel> orders, CancellationToken ct)
+    {
+        var type = row.OutputType;
+        var safeBase = MakeSafeFileName(Path.GetFileNameWithoutExtension(batch.FileName));
+        var timestamp = Timestamp(batch);
+
+        // Reuse the folder SQL remembers; fall back to the pipeline's own folder naming.
+        var folder = RecordedFinalPath(row)?.TrimEnd('/')
+                     ?? $"{OutputPrefix}{HashPrefix(batch)}_{safeBase}_{timestamp}/{type.ToString().ToUpperInvariant()}_{safeBase}_{timestamp}";
+
+        var existing = await _blobStorageService.ListAsync(folder + "/", ct);
+        var missing = OrdersWithoutFile(existing, orders, type);
+
+        foreach (var order in missing)
+        {
+            await UploadOrderFileAsync(
+                batch, type, folder, safeBase, TimestampFromFolder(folder, timestamp), order, ct);
+        }
+
+        MarkSuccess(row, folder + "/");
+        return missing.Count;
+    }
+
+    // =====================================================================
+    // TRIGGER 2: new batch, but output files for the same content already exist
+    // =====================================================================
+
+    public async Task<int> AdoptExistingOutputsAsync(
+        ProcessingBatch batch,
+        IReadOnlyCollection<OutputFile> outputs,
+        IReadOnlyCollection<CanonicalOrderModel> orders,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(batch.FileHash))
+        {
+            return 0;
+        }
+
+        var pending = outputs.Where(o => o.Status != OutputStatus.Success).ToList();
+
+        if (pending.Count == 0 || orders.Count == 0)
+        {
+            return 0;
+        }
+
+        var mine = new Dictionary<string, BlobItemInfo>(StringComparer.OrdinalIgnoreCase);
+
+        // 1) New naming: output/{hash16}_...  (finds the content under ANY file name)
+        await CollectMatchingBlobsAsync($"{OutputPrefix}{HashPrefix(batch)}_", batch, mine, ct);
+
+        // 2) Old naming (before hash-first folders): only if nothing was found above
+        if (mine.Count == 0)
+        {
+            var legacyNames = new[]
+                {
+                    Path.GetFileNameWithoutExtension(batch.FileName),
+                    MakeSafeFileName(Path.GetFileNameWithoutExtension(batch.FileName))
+                }
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var name in legacyNames)
+            {
+                await CollectMatchingBlobsAsync($"{OutputPrefix}{name}_", batch, mine, ct);
+            }
+        }
+
+        if (mine.Count == 0)
+        {
+            return 0;
+        }
+
+        var orderList = orders.ToList();
+        var safeBase = MakeSafeFileName(Path.GetFileNameWithoutExtension(batch.FileName));
+        var adopted = new List<OutputType>();
+        var generatedFiles = 0;
+
+        foreach (var row in pending)
+        {
+            var ofType = mine.Values
+                .Where(b => b.Metadata.TryGetValue(BlobMetadataKeys.OutputType, out var t)
+                            && string.Equals(t, row.OutputType.ToString(), StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (ofType.Count == 0)
+            {
+                continue;
+            }
+
+            if (row.OutputType == OutputType.Xlsx)
+            {
+                MarkSuccess(row, ofType.OrderByDescending(b => b.Path, StringComparer.Ordinal).First().Path);
+                adopted.Add(row.OutputType);
+                continue;
+            }
+
+            // The folder that holds most of this format's files is the original one.
+            var folder = ofType
+                .GroupBy(b => DirectoryOf(b.Path), StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(g => g.Count())
+                .ThenByDescending(g => g.Key, StringComparer.Ordinal)
+                .First();
+
+            var missing = OrdersWithoutFile(folder.Select(b => b.Path).ToList(), orderList, row.OutputType);
+
+            foreach (var order in missing)
+            {
+                await UploadOrderFileAsync(
+                    batch, row.OutputType, folder.Key,
+                    BaseNameFromFolder(folder.Key, row.OutputType, safeBase),
+                    TimestampFromFolder(folder.Key, Timestamp(batch)), order, ct);
+            }
+
+            generatedFiles += missing.Count;
+            MarkSuccess(row, folder.Key + "/");
+            adopted.Add(row.OutputType);
+        }
+
+        if (adopted.Count == 0)
+        {
+            return 0;
+        }
+
+        // LogEventAsync calls SaveChanges, which also commits the OutputFile rows changed above.
+        await AuditAsync(
+            batch, EventType.OutputsAdoptedFromStorage,
+            $"Output files for identical file content were already in blob storage and were reused instead of " +
+            $"generated again. Formats: {string.Join(", ", adopted)}. Files created for missing orders: {generatedFiles}.",
+            ct);
+
+        _logger.LogWarning(
+            "Reconciliation: batch {BatchId} adopted existing outputs | Formats={Formats} | MissingFilesCreated={Files}",
+            batch.BatchId, string.Join(", ", adopted), generatedFiles);
+
+        return adopted.Count;
+    }
+
+    // =====================================================================
+    // SHARED HELPERS
+    // =====================================================================
+
+    private async Task UploadOrderFileAsync(
+        ProcessingBatch batch,
+        OutputType type,
+        string folder,
+        string safeBase,
+        string timestamp,
+        CanonicalOrderModel order,
+        CancellationToken ct)
+    {
+        using var generated = await _fileGeneratorService.GenerateAsync([order], type, ct);
+
+        // Same name pattern as the pipeline: {OrderId}_{InputFileName}_{Timestamp}.{ext}
+        var blobName =
+            $"{folder.TrimEnd('/')}/{MakeSafeFileName(order.OrderId)}_{safeBase}_{timestamp}.{type.ToString().ToLowerInvariant()}";
+
+        await _blobStorageService.UploadAsync(
+            generated, blobName, BuildMetadata(batch, type, order.OrderId), ct);
+    }
+
+    /// <summary>Lists blobs under a prefix and keeps those whose FileHash metadata equals this batch's hash.</summary>
+    private async Task CollectMatchingBlobsAsync(
+        string prefix, ProcessingBatch batch, Dictionary<string, BlobItemInfo> mine, CancellationToken ct)
+    {
+        var blobs = await _blobStorageService.ListWithMetadataAsync(prefix, ct);
+
+        foreach (var blob in blobs)
+        {
+            if (blob.Metadata.TryGetValue(BlobMetadataKeys.FileHash, out var hash)
+                && string.Equals(hash, batch.FileHash, StringComparison.OrdinalIgnoreCase))
+            {
+                mine[blob.Path] = blob;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Orders that have no file of this format yet. A file belongs to an order when its name starts
+    /// with "{OrderId}_" (so ORD1 never matches ORD10) - timestamp differences do not matter.
+    /// </summary>
+    private static List<CanonicalOrderModel> OrdersWithoutFile(
+        IReadOnlyCollection<string> blobNames,
+        IReadOnlyCollection<CanonicalOrderModel> orders,
+        OutputType type)
+    {
+        var extension = "." + type.ToString().ToLowerInvariant();
+
+        var fileNames = blobNames
+            .Select(n => Path.GetFileName(n))
+            .Where(n => n.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return orders
+            .Where(order =>
+            {
+                var prefix = MakeSafeFileName(order.OrderId) + "_";
+                return !fileNames.Any(f => f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+            })
+            .ToList();
+    }
+
+    /// <summary>The path SQL remembers, as a blob path, but only if it is already in output/.</summary>
+    private string? RecordedFinalPath(OutputFile row)
+    {
+        if (string.IsNullOrWhiteSpace(row.OutputBlobPath))
+        {
+            return null;
+        }
+
+        var relative = _folders.ToRelativePath(row.OutputBlobPath);
+
+        return relative.StartsWith(OutputPrefix, StringComparison.OrdinalIgnoreCase)
+            ? relative
+            : null;
+    }
+
+    private void MarkSuccess(OutputFile row, string relativePath)
+    {
+        row.OutputBlobPath = _folders.ToFullPath(relativePath);
+        row.Status = OutputStatus.Success;
+        row.StartedDateTime ??= DateTime.UtcNow;
+        row.CompletedDateTime ??= DateTime.UtcNow;
+        row.ErrorCode = null;
+        row.ErrorMessage = null;
+    }
+
+    private static Dictionary<string, string> BuildMetadata(
+        ProcessingBatch batch, OutputType type, string? orderId)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            [BlobMetadataKeys.CorrelationId] = batch.CorrelationId.ToString(),
+            [BlobMetadataKeys.BatchId] = batch.BatchId.ToString(),
+            [BlobMetadataKeys.FileHash] = batch.FileHash ?? string.Empty,
+            [BlobMetadataKeys.FileName] = batch.FileName,
+            [BlobMetadataKeys.OutputType] = type.ToString()
+        };
+
+        if (orderId is not null)
+        {
+            metadata[BlobMetadataKeys.OrderId] = orderId;
+        }
+
+        return metadata;
+    }
+
+    private async Task AuditAsync(
+        ProcessingBatch batch, EventType eventType, string message, CancellationToken ct)
+    {
+        await _auditService.LogEventAsync(
+            batch.BatchId, batch.CorrelationId, batch.FileName,
+            eventType, "Success", message,
+            nameof(OutputReconciliationService),
+            batch.CurrentStep, batch.CurrentStep,
+            0, null, null, null, ct);
+    }
+
+    /// <summary>MUST produce exactly the same text as the hash prefix used in ProcessingFunction.</summary>
+    private static string HashPrefix(ProcessingBatch batch) =>
+        string.IsNullOrEmpty(batch.FileHash)
+            ? "nohash"
+            : batch.FileHash[..Math.Min(16, batch.FileHash.Length)].ToLowerInvariant();
+
+    /// <summary>Format folder is "{TYPE}_{name}_{17-digit timestamp}"; returns {name}.</summary>
+    private static string BaseNameFromFolder(string folder, OutputType type, string fallback)
+    {
+        var name = folder.TrimEnd('/').Split('/').Last();
+        var prefix = type.ToString().ToUpperInvariant() + "_";
+        var tail = TimestampLength + 1;   // "_" + timestamp
+
+        return name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && name.Length > prefix.Length + tail
+            ? name[prefix.Length..^tail]
+            : fallback;
+    }
+
+    private static string Timestamp(ProcessingBatch batch) =>
+        batch.ReceivedDateTime.ToString(TimestampFormat, CultureInfo.InvariantCulture);
+
+    /// <summary>Folder names end with the 17-digit timestamp; reuse it so new files match their siblings.</summary>
+    private static string TimestampFromFolder(string folder, string fallback)
+    {
+        var name = folder.TrimEnd('/').Split('/').Last();
+
+        return name.Length >= TimestampLength && name[^TimestampLength..].All(char.IsDigit)
+            ? name[^TimestampLength..]
+            : fallback;
+    }
+
+    private static string DirectoryOf(string blobPath)
+    {
+        var index = blobPath.LastIndexOf('/');
+        return index < 0 ? string.Empty : blobPath[..index];
+    }
+
+    private static ReconciliationResult Failed(long batchId, string reason) =>
+        new() { Success = false, BatchId = batchId, Reason = reason };
+
+    /// <summary>Must stay identical to ProcessingFunction.MakeSafeFileName.</summary>
     private static string MakeSafeFileName(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -251,7 +634,7 @@ public class OutputReconciliationService : IOutputReconciliationService
             return "Order";
         }
 
-        var invalidCharacters = Path.GetInvalidFileNameChars();
-        return new string(value.Select(c => invalidCharacters.Contains(c) ? '_' : c).ToArray());
+        var invalid = Path.GetInvalidFileNameChars();
+        return new string(value.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
     }
 }
