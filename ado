@@ -1,61 +1,3 @@
-# Migrating your pipeline from Jenkins to Azure DevOps
-
-Your pipeline moves over easily. The PowerShell logic stays almost the same, because it only uses SAS tokens, HTTP calls and JMeter. What changes is the wrapper around it.
-
-## 1. What changes
-
-| Jenkins | Azure DevOps |
-|---|---|
-| `Jenkinsfile` | `azure-pipelines.yml` |
-| `agent any` | `pool:` (which machine runs it) |
-| `parameters { string(...) }` | `parameters:` (runtime parameters) |
-| `environment { ... }` | `variables:` |
-| Credentials (Secret text) | Variable group with secret variables |
-| `withCredentials` | Secrets must be mapped explicitly with `env:` on each step |
-| `post { always { } }` | A step with `condition: succeededOrFailed()` |
-| `env.BUILD_NUMBER` | `$(Build.BuildId)` |
-| `BUILD_URL` | `$(System.CollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)` |
-| `timeout(...)` | `timeoutInMinutes:` on the job |
-| `disableConcurrentBuilds()` | A single self-hosted agent runs one job at a time, so you get this for free |
-| Build with Parameters | Run pipeline → Parameters |
-
-## 2. Choose where it runs
-
-Your JMeter is installed at `D:/apache-jmeter-5.6.3/...` on your PC, so the simplest option is a **self-hosted agent on that same PC**.
-
-| | Self-hosted agent (your PC) | Microsoft-hosted agent |
-|---|---|---|
-| JMeter | Already installed | You'd download it in every run |
-| Reaches internal apps | Yes, if you're on VPN | No, public URLs only |
-| Setup | Install the agent once | None, but new orgs may need to request free parallel jobs |
-
-I'd start with self-hosted, which matches what you have now. You can move to Microsoft-hosted later by changing the `pool` and adding a JMeter download step.
-
-## 3. Setup, in order
-
-**A. Create a token for the agent**
-ADO → your avatar (top right) → **User settings → Personal access tokens → New Token** → Scopes: **Custom defined → Show all scopes → Agent Pools (Read & manage)** → Create → copy it.
-
-**B. Install the agent**
-1. **Project settings → Pipelines → Agent pools → Default → New agent → Windows → Download**. You need admin rights on the pool. If the button isn't there, ask a project admin.
-2. Extract the zip to a short path such as `C:\agent`.
-3. Open PowerShell **as administrator** in that folder and run `.\config.cmd`. This is the only place a command prompt is needed, and it's local setup, not Azure. Answer the prompts: server URL `https://dev.azure.com/<your-org>`, authentication PAT, paste the token, pool `Default`, any agent name, work folder `_work`, and **yes** to "run as a service".
-4. Check **Agent pools → Default → Agents** shows your agent as **Online**.
-
-If JMeter fails later with a permissions error on `D:\`, change the service's "Log on as" account to your own user in the Windows Services app.
-
-**C. Create the secrets**
-**Pipelines → Library → + Variable group** → name `aitestiq-secrets`. Add two variables, `SAS_TEST_SCRIPTS` and `SAS_REPORTS`, with your existing SAS token values. Click the **lock icon** next to each one to make them secret, then **Save**.
-
-**D. Add the YAML**
-Put the file below in an Azure Repos repository as `azure-pipelines.yml` (**Repos → Files → New file**). Then **Pipelines → New pipeline → Azure Repos Git → your repo → Existing Azure Pipelines YAML file → Save**.
-
-**E. First run**
-The first run stops and says the pipeline needs permission for the agent pool and variable group. Click **View → Permit** for each, and it continues.
-
-## 4. The pipeline
-
-```yaml
 name: aitestiq-nft-$(Date:yyyyMMdd)$(Rev:.r)
 
 trigger: none
@@ -75,11 +17,9 @@ variables:
   - group: aitestiq-secrets
   - name: STORAGE_ACCOUNT
     value: aitestagentstorage
-  - name: JMETER_BAT
-    value: D:/apache-jmeter-5.6.3/apache-jmeter-5.6.3/bin/jmeter.bat
 
 pool:
-  name: Default
+  vmImage: windows-latest
 
 jobs:
   - job: nft_run
@@ -87,6 +27,43 @@ jobs:
     timeoutInMinutes: 60
     steps:
       - checkout: none
+
+      # 0. Java (pre-installed on the hosted image) and JMeter (downloaded)
+      - task: JavaToolInstaller@0
+        displayName: Select Java 17
+        inputs:
+          versionSpec: '17'
+          jdkArchitectureOption: 'x64'
+          jdkSourceOption: 'PreInstalled'
+
+      - powershell: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $version = "5.6.3"
+          $root = $env:JMETER_ROOT
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $zip = Join-Path $root "jmeter.zip"
+          $url = "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-$version.zip"
+
+          $ok = $false
+          for ($i = 1; $i -le 3 -and -not $ok; $i++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+              $ok = $true
+            }
+            catch {
+              Write-Host "Download attempt $i failed."
+              Start-Sleep -Seconds 5
+            }
+          }
+          if (-not $ok) { Write-Host "Could not download JMeter."; exit 1 }
+
+          Expand-Archive -Path $zip -DestinationPath $root -Force
+          $jmDir = Join-Path $root "apache-jmeter-$version"
+          Write-Host "##vso[task.setvariable variable=JMETER_DIR]$jmDir"
+          & (Join-Path $jmDir "bin\jmeter.bat") -v
+        displayName: Install JMeter
+        env:
+          JMETER_ROOT: $(Agent.TempDirectory)\jmeter
 
       # 1. Prepare
       - powershell: |
@@ -127,7 +104,7 @@ jobs:
 
       # 3. Run JMeter for every JMX and build run-summary.json
       - powershell: |
-          $jmeterExe = $env:JMETER_BAT
+          $jmeterExe = Join-Path $env:JMETER_DIR "bin\jmeter.bat"
           if (-not (Test-Path $jmeterExe)) { Write-Host "JMeter not found at $jmeterExe"; exit 1 }
 
           $runs   = @()
@@ -177,13 +154,13 @@ jobs:
           if ($failed) { $overallStatus = "ERROR" }
 
           $summary = [ordered]@{
-            runId           = $env:RUN_ID
-            prId            = $env:PR_ID
-            commitSha       = $env:COMMIT_SHA
-            status          = $overallStatus
-            jenkinsBuildUrl = $env:BUILD_URL
-            totalJmxFiles   = $runs.Count
-            runs            = $runs
+            runId         = $env:RUN_ID
+            prId          = $env:PR_ID
+            commitSha     = $env:COMMIT_SHA
+            status        = $overallStatus
+            buildUrl      = $env:BUILD_URL
+            totalJmxFiles = $runs.Count
+            runs          = $runs
           }
           $json = ConvertTo-Json -InputObject $summary -Depth 10
           [System.IO.File]::WriteAllText((Join-Path (Get-Location) "work/run-summary.json"), $json)
@@ -222,43 +199,8 @@ jobs:
           RUN_ID: $(Build.BuildId)
           SAS_REPORTS_TOKEN: $(SAS_REPORTS)
 
-      # Optional: keep the raw JMeter results in ADO for debugging
+      # Optional: keep raw JMeter results in the ADO run for debugging
       - publish: $(System.DefaultWorkingDirectory)/work/results
         artifact: jmeter-results
         condition: succeededOrFailed()
         continueOnError: true
-```
-
-## 5. What I changed in your scripts
-
-- **Secrets are mapped by hand.** Unlike Jenkins' `withCredentials`, ADO never exposes secret variables to scripts automatically. Each step lists `env:` entries for the secrets it needs. The upload step maps `SAS_REPORTS` to `SAS_REPORTS_TOKEN` because a secret with the same name as its own environment variable can cause confusion.
-- **I removed `$( ... )` from the PowerShell.** ADO replaces `$(name)` text in YAML before the script runs. Your `$($jmx.Name)` style expressions are usually left alone because the names aren't defined variables, but it's safer to avoid them, so I used plain variables and `${env:NAME}`.
-- **`Write-Error` became `Write-Host` plus `exit 1`.** The ADO PowerShell task stops on any error, and this makes the messages and failure behaviour predictable.
-- **The upload runs on `succeededOrFailed()`.** Your `post { always }` also ran on aborts, and this version doesn't upload when someone cancels the run.
-- **File writing:** `WriteAllText` creates UTF-8 without a BOM. `Set-Content` in Windows PowerShell 5.1 writes the system's ANSI encoding, which can corrupt non-ASCII characters.
-
-## 6. Things to know
-
-- **`jenkinsBuildUrl` and the run ids.** The summary key is still called `jenkinsBuildUrl`, but it now holds the ADO run URL. Rename it to `buildUrl` if Pranshu's Ag NFT contract allows (agree this with him). Run ids are now `Build.BuildId`, which are large numbers shared across all pipelines in the project, so `run-8412` in blob won't be sequential.
-- **Your script reruns every `.jmx` in the container each time.** That works for now, but once Ag Write adds files regularly, you'll want an `incoming/` folder that gets cleaned after each run, as in my earlier watcher idea. Otherwise old tests rerun forever.
-- **Only `run-summary.json` goes to blob.** If Ag NFT later needs the raw `.jtl` or the HTML report, upload those too. The `publish` step above keeps them in the ADO run as an artifact, but that's not in your storage account.
-- **Run it by hand first.** **Pipelines → your pipeline → Run pipeline**, set the parameters (or keep the defaults), and open the run log. Then check `reports/PR-manual/run-<id>/run-summary.json` in the portal.
-
-## 7. The advantage you get from ADO
-
-With Jenkins on your PC, Azure couldn't call it, so I suggested polling. ADO has a public REST API, so an **Azure Function** (started by Event Grid when a `.jmx` is uploaded) can start your pipeline directly. Your self-hosted agent only makes outbound connections to ADO, so nothing needs to reach your PC. The call looks like this:
-
-```
-POST https://dev.azure.com/<org>/<project>/_apis/pipelines/<pipelineId>/runs?api-version=7.1
-Body: { "templateParameters": { "prId": "482", "commitSha": "a1b2c3d" } }
-```
-
-It authenticates with a PAT or a service identity. That is the natural way to trigger it from Ag Write, or from an orchestrator.
-
-## 8. Check with your team
-
-1. Is there an ADO project and repo where you can add the YAML and create variable groups?
-2. Can you create a self-hosted agent in that organisation, or does a Microsoft-hosted agent have to be used?
-3. Does Pranshu's Ag NFT want `jenkinsBuildUrl` renamed?
-
-If you send me the first run's log (or any red step), I can fix it. When this works, I can write the Azure Function that starts the pipeline whenever a `.jmx` lands in the container.
