@@ -1,37 +1,36 @@
       - powershell: |
-          $ProgressPreference = 'SilentlyContinue'
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-          $root = $env:JMETER_ROOT
-          New-Item -ItemType Directory -Path $root -Force | Out-Null
-          $zip = Join-Path $root "jmeter.zip"
-
-          # 1) Fast path: your own storage account
-          $sas     = $env:SAS_SCRIPTS.TrimStart('?')
-          $blobUrl = "https://${env:STORAGE_ACCOUNT}.blob.core.windows.net/test-scripts/tools/jmeter.zip?${sas}"
-          $ok = $false
-          try {
-            Invoke-WebRequest -Uri $blobUrl -OutFile $zip -UseBasicParsing -TimeoutSec 300
-            $ok = $true
-            Write-Host "JMeter downloaded from storage."
+          $raw = $env:SAS_SCRIPTS
+          if ([string]::IsNullOrWhiteSpace($raw)) { Write-Host "TOKEN IS EMPTY"; exit 0 }
+          if ($raw.StartsWith('$' + '(')) { Write-Host "VARIABLE NOT SUBSTITUTED (name mismatch or group not linked)"; exit 0 }
+          if ($raw.StartsWith('http')) { Write-Host "You pasted a full URL. Use only the token that starts with sv=" }
+          $sas = $raw.TrimStart('?')
+          Write-Host ("Token length: " + $sas.Length)
+          foreach ($pair in $sas.Split('&')) {
+            $k = $pair.Split('=')[0]
+            if (@('sv','sp','sr','se','st','spr','sip','srt','ss') -contains $k) { Write-Host $pair }
           }
-          catch { Write-Host "Storage download failed: $($_.Exception.Message)" }
+          try { Write-Host ("Agent IP: " + (Invoke-RestMethod -Uri 'https://api.ipify.org' -TimeoutSec 15)) } catch { }
 
-          # 2) Slow fallback: Apache archive
-          if (-not $ok) {
-            Write-Host "Falling back to the Apache archive (slow)..."
-            Invoke-WebRequest -Uri "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.zip" -OutFile $zip -UseBasicParsing -TimeoutSec 600
+          $acct = $env:STORAGE_ACCOUNT
+          $tests = @(
+            @{ name = 'container list'; method = 'Get';  url = "https://${acct}.blob.core.windows.net/test-scripts?restype=container&comp=list&maxresults=5&${sas}" },
+            @{ name = 'tools/jmeter.zip'; method = 'Head'; url = "https://${acct}.blob.core.windows.net/test-scripts/tools/jmeter.zip?${sas}" }
+          )
+          foreach ($t in $tests) {
+            try {
+              $r = Invoke-WebRequest -Uri $t.url -Method $t.method -UseBasicParsing -TimeoutSec 60
+              Write-Host ("OK   " + $t.name + " -> HTTP " + [int]$r.StatusCode)
+            }
+            catch {
+              $resp = $_.Exception.Response
+              if ($resp) {
+                Write-Host ("FAIL " + $t.name + " -> HTTP " + [int]$resp.StatusCode + "  error-code: " + $resp.Headers['x-ms-error-code'])
+                try { $reader = New-Object IO.StreamReader($resp.GetResponseStream()); Write-Host $reader.ReadToEnd() } catch { }
+              }
+              else { Write-Host ("FAIL " + $t.name + " -> " + $_.Exception.Message) }
+            }
           }
-
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, (Join-Path $root "x"))
-
-          $bat = Get-ChildItem -Path (Join-Path $root "x") -Recurse -Filter jmeter.bat | Select-Object -First 1
-          if (-not $bat) { Write-Host "jmeter.bat not found after extracting."; exit 1 }
-          $jmDir = Split-Path -Parent (Split-Path -Parent $bat.FullName)
-          Write-Host "##vso[task.setvariable variable=JMETER_DIR]$jmDir"
-          Write-Host "JMeter ready at $jmDir"
-        displayName: Install JMeter
-        timeoutInMinutes: 10
+        displayName: Check SAS (temporary)
         env:
-          JMETER_ROOT: $(Agent.TempDirectory)\jmeter
           SAS_SCRIPTS: $(SAS_TEST_SCRIPTS)
