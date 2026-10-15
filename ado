@@ -1,36 +1,57 @@
-      - powershell: |
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-          $raw = $env:SAS_SCRIPTS
-          if ([string]::IsNullOrWhiteSpace($raw)) { Write-Host "TOKEN IS EMPTY"; exit 0 }
-          if ($raw.StartsWith('$' + '(')) { Write-Host "VARIABLE NOT SUBSTITUTED (name mismatch or group not linked)"; exit 0 }
-          if ($raw.StartsWith('http')) { Write-Host "You pasted a full URL. Use only the token that starts with sv=" }
-          $sas = $raw.TrimStart('?')
-          Write-Host ("Token length: " + $sas.Length)
-          foreach ($pair in $sas.Split('&')) {
-            $k = $pair.Split('=')[0]
-            if (@('sv','sp','sr','se','st','spr','sip','srt','ss') -contains $k) { Write-Host $pair }
-          }
-          try { Write-Host ("Agent IP: " + (Invoke-RestMethod -Uri 'https://api.ipify.org' -TimeoutSec 15)) } catch { }
+from __future__ import annotations
 
-          $acct = $env:STORAGE_ACCOUNT
-          $tests = @(
-            @{ name = 'container list'; method = 'Get';  url = "https://${acct}.blob.core.windows.net/test-scripts?restype=container&comp=list&maxresults=5&${sas}" },
-            @{ name = 'tools/jmeter.zip'; method = 'Head'; url = "https://${acct}.blob.core.windows.net/test-scripts/tools/jmeter.zip?${sas}" }
-          )
-          foreach ($t in $tests) {
-            try {
-              $r = Invoke-WebRequest -Uri $t.url -Method $t.method -UseBasicParsing -TimeoutSec 60
-              Write-Host ("OK   " + $t.name + " -> HTTP " + [int]$r.StatusCode)
-            }
-            catch {
-              $resp = $_.Exception.Response
-              if ($resp) {
-                Write-Host ("FAIL " + $t.name + " -> HTTP " + [int]$resp.StatusCode + "  error-code: " + $resp.Headers['x-ms-error-code'])
-                try { $reader = New-Object IO.StreamReader($resp.GetResponseStream()); Write-Host $reader.ReadToEnd() } catch { }
-              }
-              else { Write-Host ("FAIL " + $t.name + " -> " + $_.Exception.Message) }
-            }
-          }
-        displayName: Check SAS (temporary)
-        env:
-          SAS_SCRIPTS: $(SAS_TEST_SCRIPTS)
+import base64
+import logging
+import os
+from urllib.parse import quote
+
+import requests
+
+logger = logging.getLogger("pipeline_trigger")
+
+
+class AdoPipelineClient:
+    def __init__(self, org: str, project: str, pipeline_id: str, pat: str):
+        self.org = org
+        self.project = project
+        self.pipeline_id = pipeline_id
+        token = base64.b64encode(f":{pat}".encode()).decode()
+        self._headers = {
+            "Authorization": f"Basic {token}",
+            "Content-Type": "application/json",
+        }
+
+    @classmethod
+    def from_env(cls) -> "AdoPipelineClient":
+        return cls(
+            org=os.environ["ADO_ORG"],
+            project=os.environ["ADO_PROJECT"],
+            pipeline_id=os.environ["ADO_PIPELINE_ID"],
+            pat=os.environ["ADO_PAT"],
+        )
+
+    def run(self, doc_id: str) -> dict:
+        url = (
+            f"https://dev.azure.com/{self.org}/{quote(self.project)}"
+            f"/_apis/pipelines/{self.pipeline_id}/runs?api-version=7.1"
+        )
+        body = {"templateParameters": {"docId": doc_id}}
+        resp = requests.post(url, json=body, headers=self._headers, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        return {
+            "id": data.get("id"),
+            "url": data.get("_links", {}).get("web", {}).get("href"),
+        }
+
+
+def trigger_nft_pipeline(doc_id: str) -> dict | None:
+    """Start the ADO NFT pipeline for one Cosmos run record. Never raises."""
+    try:
+        result = AdoPipelineClient.from_env().run(doc_id)
+        logger.info("NFT pipeline started for %s: run %s (%s)",
+                    doc_id, result["id"], result["url"])
+        return result
+    except Exception:
+        logger.exception("Could not start NFT pipeline for %s", doc_id)
+        return None
