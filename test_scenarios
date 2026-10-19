@@ -1,245 +1,718 @@
-pipeline {
-    agent any
+# AITestIQ - Complete Project Guide
 
-    options {
-        timestamps()
-        timeout(time: 60, unit: 'MINUTES')
-        disableConcurrentBuilds()
-    }
+This document explains the repository from installation through the end-to-end
+execution flow. It is based on the code currently present in this checkout.
 
-    parameters {
-        string(
-            name: 'PR_ID',
-            defaultValue: 'manual',
-            description: 'Pull Request ID'
-        )
-        string(
-            name: 'COMMIT_SHA',
-            defaultValue: 'none',
-            description: 'Source commit SHA'
-        )
-    }
+## 1. What the project does
 
-    environment {
-        STORAGE_ACCOUNT = 'aitestagentstorage'
-        RUN_ID          = "${env.BUILD_NUMBER}"
-    }
+AITestIQ is an AI-assisted test-impact and non-functional-test analysis system.
+Its intended flow is:
 
-    stages {
+1. A pull request (PR) becomes active in Azure DevOps.
+2. **Ag Read** downloads the PR change and asks an LLM to describe its impact and
+   risk.
+3. Ag Read stores that description in a per-PR document in **Azure Cosmos DB**.
+4. **Ag Write** decides whether to reuse, modify, or create a JMeter test.
+5. Ag Write validates the LLM proposal with deterministic rules, renders a `.jmx`
+   file, and stores it in **Azure Blob Storage**.
+6. An Azure DevOps/JMeter pipeline runs the generated JMeter file.
+7. **Ag NFT** reads JMeter `.jtl`/CSV/XML results, calculates performance metrics,
+   evaluates SLA rules, optionally asks an LLM for explanations, and writes an
+   HTML/JSON report.
+8. **Ag Report** is intended to log defects in Azure DevOps. In this checkout it is
+   still a stub.
 
-        // ============================================================
-        // 1. Prepare working directory
-        // ============================================================
-        stage('Prepare') {
-            steps {
-                powershell '''
-                if (Test-Path "work") {
-                    Remove-Item "work" -Recurse -Force
-                }
-                New-Item -ItemType Directory -Path "work/scripts" -Force | Out-Null
-                New-Item -ItemType Directory -Path "work/results" -Force | Out-Null
-                Write-Host "Working directory prepared."
-                '''
-            }
-        }
+The system deliberately uses:
 
-        // ============================================================
-        // 2. Download ALL .jmx files from the container
-        // ============================================================
-        stage('Download JMX Files') {
-            steps {
-                withCredentials([
-                    string(credentialsId: 'sas-test-script', variable: 'SAS_SCRIPTS')
-                ]) {
-                    powershell '''
-                    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+- **Cosmos DB** for small, queryable coordination state.
+- **Blob Storage** for large files such as diffs, JMX scripts, logs, and reports.
+- **Pydantic contracts** for data exchanged between agents.
+- **LangGraph** for deterministic multi-step workflows.
+- **Azure OpenAI** for reasoning and explanations.
+- **Deterministic guards** around LLM output so an invalid test is not stored.
 
-                    $sas     = $env:SAS_SCRIPTS.TrimStart('?')
-                    $base    = "https://$($env:STORAGE_ACCOUNT).blob.core.windows.net/test-scripts"
-                    $listUri = "${base}?restype=container&comp=list&$sas"
+## 2. Repository map
 
-                    try {
-                        # List all blobs in the container (SAS needs Read + List permissions)
-                        $resp  = Invoke-WebRequest -Uri $listUri -UseBasicParsing
-                        $text  = $resp.Content
-                        $xml   = [xml]($text.Substring($text.IndexOf('<')))
-                        $blobs = @(
-                            $xml.EnumerationResults.Blobs.Blob |
-                                Where-Object { $_.Name -like '*.jmx' } |
-                                ForEach-Object { $_.Name }
-                        )
+| Folder/file | Responsibility |
+|---|---|
+| [`contracts/`](contracts/) | Shared Pydantic data models. This is the API between agents. |
+| [`shared/`](shared/) | Azure configuration, Cosmos, Blob, LLM, and telemetry helpers. |
+| [`ag_read/`](ag_read/) | Reads Azure DevOps PR changes and produces `AgReadOutput`. |
+| [`ag_write/`](ag_write/) | Decides and generates JMeter tests from `AgReadOutput`. |
+| [`ag_nft/`](ag_nft/) | Parses and evaluates JMeter results and creates reports. |
+| [`ag_report/`](ag_report/) | Intended ADO defect/report integration; currently a stub. |
+| [`jenkins/`](jenkins/) | Pipeline definitions and ADO pipeline trigger helper. |
+| [`README.md`](README.md) | Short project overview and team/branching model. |
+| [`flow.md`](flow.md) | Design-level system flow. |
+| [`decision.md`](decision.md) | Design decisions and rationale. |
+| [`requirements.txt`](requirements.txt) | Python dependencies. |
+| [`azure-pipelines.yml`](azure-pipelines.yml) | Ag Read Azure DevOps pipeline. |
 
-                        if ($blobs.Count -eq 0) {
-                            throw "No .jmx files found in the test-scripts container."
-                        }
+## 3. Runtime data model: the Cosmos run record
 
-                        Write-Host "JMX files found: $($blobs.Count)"
+The central coordination object is `PrRunRecord` in
+[`contracts/run_record.py`](contracts/run_record.py). Its deterministic ID is:
 
-                        foreach ($blob in $blobs) {
-                            $fileName = [IO.Path]::GetFileName($blob)
-                            $encoded  = ($blob -split '/' | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/'
+```text
+<repo>-<pr_id>-<commit_sha>
+```
 
-                            Invoke-WebRequest `
-                                -Uri "$base/${encoded}?$sas" `
-                                -OutFile "work/scripts/$fileName" `
-                                -UseBasicParsing
+Example:
 
-                            Write-Host "Downloaded: $blob"
-                        }
-                    }
-                    catch {
-                        Write-Error "Failed to download JMX files."
-                        Write-Error $_.Exception.Message
-                        exit 1
-                    }
-                    '''
-                }
-            }
-        }
+```text
+payments-api-42-a1b2c3d4
+```
 
-        // ============================================================
-        // 3. Run JMeter for every JMX + build run-summary.json
-        // ============================================================
-        stage('Run JMeter') {
-            steps {
-                powershell '''
-                $jmeterExe = "D:/apache-jmeter-5.6.3/apache-jmeter-5.6.3/bin/jmeter.bat"
+This makes a PR/commit run idempotent: running the same commit again updates the
+same document instead of creating a duplicate.
 
-                $runs   = @()
-                $failed = $false
+The record contains:
 
-                $jmxFiles = Get-ChildItem "work/scripts" -Filter "*.jmx"
-
-                foreach ($jmx in $jmxFiles) {
-
-                    $name   = $jmx.BaseName
-                    $outDir = "work/results/$name"
-                    New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-
-                    Write-Host ""
-                    Write-Host "===== Running: $($jmx.Name) ====="
-
-                    & $jmeterExe `
-                        -n `
-                        -t $jmx.FullName `
-                        -l "$outDir/results.jtl" `
-                        -j "$outDir/jmeter.log" `
-                        -e `
-                        -o "$outDir/html-report"
-
-                    $exitCode = $LASTEXITCODE
-                    Write-Host "JMeter Exit Code: $exitCode"
-
-                    # ---------- Read statistics ----------
-                    $stats     = $null
-                    $statsPath = "$outDir/html-report/statistics.json"
-
-                    if (Test-Path $statsPath) {
-                        try {
-                            $stats = Get-Content $statsPath -Raw | ConvertFrom-Json
-                        }
-                        catch {
-                            Write-Warning "Could not read statistics.json for $name"
-                            Write-Warning $_.Exception.Message
-                        }
-                    }
-
-                    # ---------- Per-transaction stats (everything except Total) ----------
-                    $transactions = [ordered]@{}
-                    if ($null -ne $stats) {
-                        $stats.PSObject.Properties |
-                            Where-Object { $_.Name -ne "Total" } |
-                            ForEach-Object { $transactions[$_.Name] = $_.Value }
-                    }
-
-                    # ---------- Status ----------
-                    if ($exitCode -eq 0 -and $null -ne $stats) {
-                        $status = "COMPLETED"
-                    }
-                    else {
-                        $status = "ERROR"
-                        $failed = $true
-                    }
-
-                    $runs += [ordered]@{
-                        jmx          = $jmx.Name
-                        status       = $status
-                        exitCode     = $exitCode
-                        overall      = $(if ($null -ne $stats) { $stats.Total } else { $null })
-                        transactions = $transactions
-                    }
-                }
-
-                # ---------- Build run-summary.json (the only file we upload) ----------
-                $summary = [ordered]@{
-                    runId           = $env:RUN_ID
-                    prId            = $env:PR_ID
-                    commitSha       = $env:COMMIT_SHA
-                    status          = $(if ($failed) { "ERROR" } else { "COMPLETED" })
-                    jenkinsBuildUrl = $env:BUILD_URL
-                    totalJmxFiles   = $runs.Count
-                    runs            = $runs
-                }
-
-                ConvertTo-Json -InputObject $summary -Depth 10 |
-                    Set-Content "work/run-summary.json"
-
-                Write-Host ""
-                Write-Host "run-summary.json created."
-
-                if ($failed) {
-                    Write-Error "One or more JMeter runs failed."
-                    exit 1
-                }
-                '''
-            }
-        }
-    }
-
-    // ============================================================
-    // POST PROCESSING - upload only run-summary.json
-    // ============================================================
-    post {
-        always {
-            withCredentials([
-                string(credentialsId: 'sas-reports', variable: 'SAS_REPORTS')
-            ]) {
-                powershell '''
-                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-                $summaryPath = "work/run-summary.json"
-
-                if (-not (Test-Path $summaryPath)) {
-                    Write-Warning "run-summary.json not found. Nothing to upload."
-                    exit 0
-                }
-
-                # Example destination: PR-manual/run-10/run-summary.json
-                $prId = $env:PR_ID
-                if ([string]::IsNullOrWhiteSpace($prId)) { $prId = 'manual' }
-
-                $sas = $env:SAS_REPORTS.TrimStart('?')
-                $uri = "https://$($env:STORAGE_ACCOUNT).blob.core.windows.net/reports/PR-$prId/run-$($env:RUN_ID)/run-summary.json`?$sas"
-
-                try {
-                    Invoke-WebRequest `
-                        -Uri $uri `
-                        -Method Put `
-                        -InFile $summaryPath `
-                        -Headers @{ 'x-ms-blob-type' = 'BlockBlob' } `
-                        -ContentType 'application/json' `
-                        -UseBasicParsing |
-                        Out-Null
-
-                    Write-Host "Uploaded: PR-$prId/run-$($env:RUN_ID)/run-summary.json"
-                }
-                catch {
-                    Write-Error "Failed to upload run-summary.json"
-                    Write-Error $_.Exception.Message
-                    exit 1
-                }
-                '''
-            }
-        }
-    }
+```json
+{
+  "id": "payments-api-42-a1b2c3d4",
+  "repo": "payments-api",
+  "pr_id": "42",
+  "commit_sha": "a1b2c3d4",
+  "status": "writing",
+  "ag_read": {},
+  "test_files": [],
+  "nft_outcomes": [],
+  "suggestions": [],
+  "defects": []
 }
+```
+
+The status is the coordination baton:
+
+| Status | Meaning |
+|---|---|
+| `analyzing` | Ag Read is creating the initial record. |
+| `writing` | Ag Read is complete; Ag Write may process it. |
+| `testing` | Ag Write succeeded and test execution/analysis can proceed. |
+| `complete` | All planned reporting work is complete. |
+| `failed` | A phase failed closed or was marked failed. |
+
+`CosmosStore` uses `/repo` as its partition key. Large artifacts are not embedded
+in this document; the record stores URLs or metadata pointing to Blob Storage.
+
+## 4. How the project is triggered
+
+There are several supported trigger mechanisms.
+
+### 4.1 Production Ag Read trigger: Azure DevOps branch policy
+
+[`azure-pipelines.yml`](azure-pipelines.yml) has `trigger: none` and `pr: none`.
+For Azure Repos, the intended trigger is an Azure DevOps **branch policy**:
+
+1. Open the target branch policies.
+2. Add this pipeline as a **Build validation** policy.
+3. When a PR targets that branch, Azure DevOps starts the pipeline.
+4. The pipeline runs:
+
+```powershell
+python -m ag_read.cli --pr-id <pull-request-id> -v
+```
+
+The pipeline maps secrets from the `aitestiq-secrets` variable group into
+environment variables.
+
+### 4.2 Ag Read polling trigger
+
+The alternative is:
+
+```powershell
+python -m ag_read.poller --once
+python -m ag_read.poller
+```
+
+[`ag_read/poller.py`](ag_read/poller.py) lists active PRs through Azure DevOps.
+For each PR it reads `lastMergeSourceCommit.commitId` and checks Cosmos. A PR is
+processed only if the exact `<repo>-<pr>-<commit>` record does not already exist.
+The normal loop sleeps for `POLL_INTERVAL_SEC` seconds, defaulting to 60.
+
+### 4.3 Ag Write trigger
+
+Ag Read's handoff has two paths:
+
+1. **Direct path:** `ag_read/handoff.py` imports `ag_write.agent.run()` and calls it.
+2. **Durable path:** Ag Read first sets the Cosmos status to `writing`.
+   [`ag_write/poller.py`](ag_write/poller.py) finds `writing` records and runs
+   `ag_write.agent.run_from_record()`.
+
+The poller uses Cosmos ETags in `claim_if_writing()` so two workers do not process
+the same record successfully.
+
+Run it with:
+
+```powershell
+python -m ag_write.poller --once
+python -m ag_write.poller
+```
+
+### 4.4 JMeter/NFT trigger
+
+On successful Ag Write, [`ag_write/agent.py`](ag_write/agent.py) calls
+`jenkins.pipeline_trigger.trigger_nft_pipeline(doc_id)`. This POSTs to an Azure
+DevOps pipeline and passes the Cosmos document ID as the `docId` template
+parameter.
+
+The JMeter pipeline is [`jenkins/jmeter-pipeline.yml`](jenkins/jmeter-pipeline.yml).
+It:
+
+1. Reads the Cosmos run record.
+2. Selects `test_files` whose type is `jmeter`.
+3. Downloads only those `.jmx` files from `test-scripts`.
+4. Runs JMeter.
+5. Uploads results/logs and writes a `jmeter_pipeline` block to Cosmos.
+6. Starts [`jenkins/nft-agent-pipeline.yml`](jenkins/nft-agent-pipeline.yml) with
+   the same `docId`.
+
+The NFT pipeline runs:
+
+```powershell
+python -m ag_nft --doc-id <cosmos-document-id> -v
+```
+
+### 4.5 Ag NFT blob-poller trigger
+
+Instead of the ADO NFT pipeline, use:
+
+```powershell
+python -m ag_nft.poller --once
+python -m ag_nft.poller
+python -m ag_nft.poller --local-root .\store --once
+```
+
+Jenkins can place an `nft_input.json` manifest next to its result files in the
+`pipeline-logs` container. The NFT poller treats that manifest as the completion
+marker, so it does not analyse a half-uploaded run. It skips a run when the final
+`nft_report.json` already exists.
+
+## 5. End-to-end flow: Ag Read
+
+The LangGraph in [`ag_read/graph.py`](ag_read/graph.py) is:
+
+```text
+START -> fetch -> analyze -> persist -> handoff -> END
+```
+
+### Step 1: fetch
+
+[`ag_read/fetch.py`](ag_read/fetch.py) uses `AdoClient` and the Azure DevOps REST
+API:
+
+1. `get_pr()` reads PR metadata, branches, and source/target commits.
+2. `latest_iteration_id()` selects the newest PR iteration.
+3. `iteration_changes()` lists changed paths and change types.
+4. `file_content()` reads new content for added/edited/renamed files.
+5. It also attempts to read the old/base content for edits.
+
+Safety limits are `MAX_FILE_CHARS = 20_000` per file and `MAX_FILES = 50`.
+Deleted files generally have no new content to fetch.
+
+The result is an internal `PrChange` containing `ChangedFile` objects.
+
+### Step 2: analyze
+
+[`ag_read/analyzer.py`](ag_read/analyzer.py) sends bounded changed-file content to
+Azure OpenAI. The model must return JSON such as:
+
+```json
+{
+  "changed_components": ["payments/refund"],
+  "risk_level": "high",
+  "suggested_tests": ["Verify refund authorization and duplicate handling"],
+  "release_notes": "Refund authorization was changed."
+}
+```
+
+`_coerce_output()` adds repository, PR, commit, and changed-file identity and
+validates the result as `contracts.AgReadOutput`.
+
+An empty PR short-circuits without an LLM call. Optional agentic analysis is
+enabled only with `AG_READ_AGENTIC=true`; the default is the cheaper one-call
+path.
+
+### Step 3: deterministic risk guards
+
+[`ag_read/risk_guard.py`](ag_read/risk_guard.py) protects against model mistakes:
+
+- Cosmetic-only changes can be forced down to `low`.
+- Sensitive paths such as `auth`, `payment`, `database`, and public API paths have
+  a minimum risk floor.
+- The floor only raises risk; it never hides a risky change.
+
+For example, a model saying `low` for `src/auth/login.py` is raised to `high`.
+
+### Step 4: persist
+
+[`ag_read/persist.py`](ag_read/persist.py) creates a `PrRunRecord` with status
+`analyzing`, sets `ag_read`, and calls `CosmosStore.upsert()`.
+
+### Step 5: handoff
+
+[`ag_read/handoff.py`](ag_read/handoff.py):
+
+1. Changes the record status to `writing` and upserts it.
+2. Attempts the direct Ag Write call.
+3. Logs failures without making Ag Read fail; the Ag Write poller remains the
+   durable recovery mechanism.
+
+## 6. End-to-end flow: Ag Write
+
+The main implementation is [`ag_write/graph.py`](ag_write/graph.py):
+
+```text
+START -> decide
+           |-- no testable change -> finalize
+           |-- REUSE              -> reuse -> finalize
+           |-- CREATE/MODIFY      -> generate_validate -> render_store -> finalize
+```
+
+### 6.1 Preflight decision
+
+[`ag_write/coverage.py`](ag_write/coverage.py) performs the decision before any
+LLM call:
+
+- No changed component/file/test hint: skip.
+- No catalog entry: `CREATE`.
+- Catalog hit plus `low` risk: `REUSE`, zero LLM calls.
+- Catalog hit plus `medium`/`high` risk: `MODIFY`, invoke the LLM.
+
+The catalog key is derived from a stable component name, not from a model-guessed
+endpoint.
+
+### 6.2 Catalog
+
+[`ag_write/catalog.py`](ag_write/catalog.py) stores test identity and versions.
+Important helpers are:
+
+- `component_key()` - stable lookup key.
+- `stable_test_name()` - stable generated test name.
+- `bump_minor()` - creates versions such as `1.0`, `1.1`.
+- `find_active_by_key()` - finds the current test.
+- `register()`/superseding operations - record the new active version.
+
+### 6.3 Generate
+
+[`ag_write/generator.py`](ag_write/generator.py) asks Azure OpenAI for a strict
+`TestSpecification` JSON object. The specification contains:
+
+```json
+{
+  "test_name": "payments-refund",
+  "action": "CREATE",
+  "script_type": "JMETER",
+  "template": "standard-jmeter-template",
+  "scenario": {"name": "Refund", "method": "POST", "path": "/api/refund"},
+  "workload": {"threads": 10, "ramp_up_seconds": 30, "duration_seconds": 120},
+  "assertions": [{"type": "response_success", "expected": true}]
+}
+```
+
+`_strip_code_fence()` handles a model response wrapped in ```json fences.
+`_coerce_spec()` parses JSON and applies Pydantic validation.
+
+### 6.4 Deterministic validation and fail-closed behavior
+
+[`ag_write/validators.py`](ag_write/validators.py) is the safety boundary:
+
+- only `JMETER` is allowed;
+- only the approved `standard-jmeter-template` is allowed;
+- HTTP methods are allow-listed;
+- endpoint paths must begin with `/`;
+- threads are capped at 1,000;
+- ramp-up and duration are capped at 3,600 seconds;
+- at least one approved assertion is required.
+
+The graph allows at most three generation attempts. Validator errors are fed back
+to the model on the next attempt. If all three fail, the run is marked failed and
+nothing is rendered or stored.
+
+### 6.5 API registry
+
+[`ag_write/api_registry.py`](ag_write/api_registry.py) stores the real endpoint
+for a repository: host, route, method, content type, expected status, custom
+headers, Azure Functions key location, and optional request-body Blob URL.
+
+This prevents the LLM from inventing a route. The registry prefers an
+`api_catalog` Cosmos container and can fall back to `test_catalog`.
+
+### 6.6 Render and store
+
+[`ag_write/renderer.py`](ag_write/renderer.py) deterministically generates a
+complete JMeter 5.x XML plan. It includes:
+
+- target host/protocol/port variables;
+- HTTP defaults;
+- content-type and required headers;
+- optional Azure Functions key;
+- the registered endpoint path/method;
+- embedded request body;
+- response assertions;
+- result writer and summary listeners.
+
+The generated `.jmx` is uploaded to Blob container `test-scripts`. A `TestFile`
+is appended to the Cosmos record with its path, URL, action, endpoint, method, and
+workload metadata. The record is then moved to `testing` on success.
+
+### 6.7 REUSE example
+
+Suppose the catalog already contains `payments-refund` version `1.0`, and a PR
+only changes logging. Ag Write does not call the LLM. It appends a `REUSE`
+`TestFile` pointing to the existing Blob URL. This saves cost and avoids
+unnecessary test versions.
+
+## 7. JMeter execution
+
+The generated file is a normal non-interactive JMeter test plan. The ADO pipeline
+downloads it and runs a command equivalent to:
+
+```text
+jmeter -n -t test.jmx -l results.jtl -j jmeter.log -e -o html-report
+```
+
+The result files and logs are uploaded under a run-specific Blob path. The
+pipeline records the paths in the Cosmos `jmeter_pipeline` block so Ag NFT can
+find them later.
+
+The legacy [`jenkins/Jenkinsfile`](jenkins/Jenkinsfile) is an alternative Jenkins
+implementation. It downloads all `.jmx` files, executes them, creates a
+`run-summary.json`, and uploads it. The repository's Python
+[`jenkins/integration.py`](jenkins/integration.py) remains a stub and raises
+`NotImplementedError`.
+
+## 8. End-to-end flow: Ag NFT
+
+The graph in [`ag_nft/graph.py`](ag_nft/graph.py) is:
+
+```text
+START -> load -> evaluate -> analyze -> report -> persist -> handoff -> complete -> END
+```
+
+### 8.1 Input resolution
+
+`ag_nft.agent.run()` accepts a validated `NftInput`.
+`run_from_doc()` instead reads the Cosmos document, extracts
+`jmeter_pipeline.results_url` and `logs_url`, and builds the `NftInput`.
+
+### 8.2 Load and parse
+
+[`ag_nft/parsers.py`](ag_nft/parsers.py) reads `.jtl`, `.csv`, and `.xml` result
+formats and converts each request into a tool-neutral `Sample`:
+
+```text
+timestamp, elapsed milliseconds, label, pass/fail, thread count, response code
+```
+
+[`ag_nft/metrics.py`](ag_nft/metrics.py) calculates:
+
+- count and failures;
+- error percentage;
+- average, p50, p95, p99, and maximum latency;
+- throughput in requests per second;
+- per-label statistics;
+- time windows;
+- scaling efficiency;
+- shock-spike and recovery behavior;
+- common error signatures.
+
+### 8.3 Deterministic evaluation
+
+[`ag_nft/evaluate.py`](ag_nft/evaluate.py) compares metrics with `NftSettings`.
+Default examples include:
+
+- p95 target: 500 ms;
+- p99 target: 1,000 ms;
+- error-rate target: 1%;
+- scaling efficiency minimum: 0.6;
+- scaling latency-growth maximum: 3x;
+- shock error-rate tolerance: 5%.
+
+The result is a list of immutable rule checks and category outcomes:
+`performance`, `load`, `scalability`, and `shock`.
+
+The LLM cannot change these pass/fail decisions.
+
+### 8.4 Explanations
+
+[`ag_nft/analyzer.py`](ag_nft/analyzer.py) explains the deterministic evaluation.
+It supports:
+
+- `tools` mode: a bounded tool-calling analysis;
+- `digest` mode: one full-facts model call;
+- rule-based fallback if LLM is disabled or unavailable.
+
+Set `NFT_USE_LLM=false` for an entirely deterministic offline analysis.
+
+### 8.5 Report
+
+[`ag_nft/report.py`](ag_nft/report.py) produces:
+
+```text
+automation-output/<repo>/<pr>/<commit>/<run_id>/nft_report.html
+automation-output/<repo>/<pr>/<commit>/<run_id>/nft_report.json
+```
+
+The HTML includes outcomes, checks, measurements, findings, suggestions, and
+limitations. The JSON is machine-readable and is also used as a future passing
+baseline.
+
+The JSON completion marker is written last. This is important: a poller does not
+mistake a partially completed run for a successful one.
+
+### 8.6 Persist and handoff
+
+[`ag_nft/handoff.py`](ag_nft/handoff.py) writes outcomes and suggestions back into
+the existing Cosmos record, then attempts `ag_report.agent.run()`.
+
+Both operations are best effort because the report is already safely in Blob
+Storage. In the current checkout Ag Report raises `NotImplementedError`, so the
+handoff logs that it is not implemented.
+
+## 9. Contracts: what crosses boundaries
+
+| Contract | Producer | Consumer | Main fields |
+|---|---|---|---|
+| `AgReadOutput` | Ag Read | Ag Write | repo, PR, commit, components, risk, test hints |
+| `NftInput` | Jenkins/JMeter pipeline | Ag NFT | result/log URLs plus run identity |
+| `NftOutput` | Ag NFT | Ag Report | outcomes, suggestions, report URL |
+| `PrRunRecord` | Ag Read, then each agent | all durable stages | lifecycle and per-agent sections |
+
+The agents do not import each other's internal working models. They share only
+these contract models and the Cosmos record.
+
+## 10. Shared infrastructure files and functions
+
+### `shared/config.py`
+
+- `_require()` reads a required environment variable or raises `ConfigError`.
+- `_env_float()` and `_env_int()` parse optional numeric settings.
+- `AzureOpenAIConfig.from_env()` loads endpoint, key, deployment, timeout, and retry
+  settings.
+- `CosmosConfig.from_env()` loads Cosmos connection settings.
+- `BlobConfig.from_env()` loads the Storage connection string.
+- `TelemetryConfig.from_env()` loads optional Application Insights settings.
+- `parse_repo_url()` extracts organization, project, and repository from an Azure
+  DevOps URL.
+- `AzureDevOpsConfig` exposes `org_url`, `project`, and `repo`.
+
+### `shared/cosmos.py`
+
+- `CosmosStore.__init__()` creates the database/container if necessary.
+- `upsert()` writes a Pydantic record with bounded retries for transient connection
+  drops.
+- `get()` reads one record by ID and repository partition.
+- `claim_if_writing()` performs an ETag-guarded atomic claim.
+- `query_by_status()` finds work for pollers.
+
+### `shared/blob.py`
+
+- `upload_text()` creates a container if needed and uploads text.
+- `download_text()` downloads a text Blob.
+
+### `shared/llm.py`
+
+- `LLMClient.complete()` sends system/user messages to Azure OpenAI, handles
+  timeouts, logs token usage, and returns text.
+
+### `shared/telemetry.py`
+
+- `configure_telemetry()` enables Application Insights/OpenTelemetry when configured.
+- `pipeline_run()` creates a trace/span context around a pipeline.
+- `flush_telemetry()` flushes exporters.
+
+## 11. File-by-file implementation guide
+
+### Ag Read
+
+| File | Main classes/functions | Purpose |
+|---|---|---|
+| `agent.py` | `run()` | Public wrapper around `run_ag_read()`. |
+| `cli.py` | `_parse_args()`, `run()`, `main()` | `python -m ag_read.cli` command and exit codes. |
+| `poller.py` | `_record_id()`, `poll_once()`, `poll_loop()`, `main()` | Finds new active PR commits and triggers Ag Read. |
+| `fetch.py` | `AdoClient`, `fetch_pr_change()` | Azure DevOps REST reads and bounded file retrieval. |
+| `models.py` | `ChangedFile`, `PrChange` | Internal fetch-stage data shapes. |
+| `analyzer.py` | `analyze_change()`, `_coerce_output()` | LLM analysis and `AgReadOutput` validation. |
+| `agent_analyzer.py` | `_build_tools()`, `analyze_change_agentic()` | Optional tool-using Ag Read path. |
+| `instructions.py` | `build_task()` | Builds agentic analysis instructions. |
+| `risk_guard.py` | `is_cosmetic_change()`, `required_risk_floor()`, `apply_risk_floor()` | Deterministic risk corrections. |
+| `graph.py` | `_fetch_node()`, `_analyze_node()`, `_persist_node()`, `_handoff_node()`, `build_graph()`, `run_ag_read()` | LangGraph orchestration. |
+| `persist.py` | `build_record()`, `persist()` | Creates and stores `PrRunRecord`. |
+| `handoff.py` | `handoff_to_ag_write()` | Sets `writing` and invokes/reconciles Ag Write. |
+| `tests/test_risk_floor.py` | risk-floor tests | Verifies sensitive paths cannot be under-rated. |
+
+### Ag Write
+
+| File | Main classes/functions | Purpose |
+|---|---|---|
+| `agent.py` | `run()`, `run_from_record()`, `_run_with_clients()` | Direct and durable entry points. |
+| `poller.py` | `poll_once()`, `poll_loop()`, `main()` | Claims and processes `writing` records. |
+| `graph.py` | `_decide_node()`, `_reuse_node()`, `_generate_validate_node()`, `_render_store_node()`, `_finalize_node()`, `build_graph()`, `run_ag_write()` | Main generation workflow. |
+| `coverage.py` | `should_consider_change()`, `primary_component()`, `decide_action_preflight()` | REUSE/MODIFY/CREATE decision. |
+| `catalog.py` | `CatalogEntry`, `component_key()`, `stable_test_name()`, `bump_minor()`, `TestCatalog` | Test identity, versions, and active entries. |
+| `schemas.py` | `TestScenario`, `Assertion`, `WorkloadConfiguration`, `TestSpecification` | Strict internal generation model. |
+| `prompts.py` | `build_user_prompt()` | LLM prompt for a strict specification. |
+| `generator.py` | `_strip_code_fence()`, `_coerce_spec()`, `generate_specification()` | LLM call and JSON parsing. |
+| `validators.py` | `validate_specification()` | Non-AI safety gate. |
+| `renderer.py` | `render_jmx()` and XML helper functions | Deterministic JMeter XML creation. |
+| `api_registry.py` | `ApiEndpoint`, `ApiRegistry`, `get_for_repo()`, `upsert()` | Ground-truth endpoint registry. |
+| `agent_react.py` | `_build_llm()`, `run_agent()` | Optional autonomous tool-calling implementation. |
+| `tools.py` | `RunContext`, `lookup_endpoint()`, `check_catalog()`, `validate_spec()`, `render_and_store()`, `record_reuse()` | Bounded ReAct tool surface. |
+| `tests/` | smoke, negative, catalog, versioning, scenario, API, and ReAct tests | Offline and integration-style verification. |
+
+### Ag NFT
+
+| File | Main classes/functions | Purpose |
+|---|---|---|
+| `__main__.py` | `main()` | CLI for input JSON or Cosmos document ID. |
+| `agent.py` | `run()`, `run_from_doc()`, `_get_record_any_partition()` | Public entry points and document resolution. |
+| `poller.py` | `_is_done()`, `poll_once()`, `main()` | Manifest-based Blob trigger. |
+| `config.py` | `NftSettings.from_env()` | SLA, Blob, model, and analysis tuning. |
+| `models.py` | `Sample`, `Stats`, `Metrics`, `Check`, `Evaluation`, `Analysis`, `NftReport` | Internal analysis/report shapes. |
+| `storage.py` | `BlobStorage`, `LocalStorage`, `split_blob_url()`, `resolve_names()` | Azure and offline file storage abstraction. |
+| `parsers.py` | `parse_csv()`, `parse_xml()`, `load_samples()` | Converts result files to `Sample`. |
+| `metrics.py` | `compute_stats()`, `build_windows()`, `build_scaling()`, `detect_shock()`, `analyze_samples()` | Deterministic performance calculations. |
+| `evaluate.py` | category check helpers, `evaluate()`, `overall_result()`, `find_baseline()`, `read_log_signals()` | SLA and regression evaluation. |
+| `analyzer.py` | `build_prompt()`, `fallback_analysis()`, `analyze()` | LLM explanation with safe fallback. |
+| `tool_agent.py` | tool-agent analysis loop | Bounded read-only model investigation. |
+| `llm_client.py` | `AzureBackend` and usage helpers | NFT-specific Azure OpenAI adapter. |
+| `report.py` | `build_report()`, `render_json()`, `render_html()` | Machine and human report generation. |
+| `handoff.py` | `persist_outcomes()`, `handoff_to_ag_report()` | Cosmos update and report-agent signal. |
+| `graph.py` | `_load_node()` through `_completion_node()`, `build_graph()`, `run_ag_nft()` | Full NFT workflow. |
+| `measure.py` | `estimate()`, `live()`, `main()` | Measurement/cost utility. |
+| `sample_data.py` | sample-data generator | Creates local test result data. |
+| `test_*.py` | unit/integration tests | Verifies tools, parsing, LLM adapter, and agent flow. |
+
+### Jenkins, report, and contracts
+
+| File | Purpose |
+|---|---|
+| `jenkins/integration.py` | Intended Python Jenkins integration; currently raises `NotImplementedError`. |
+| `jenkins/pipeline_trigger.py` | Starts the ADO NFT pipeline using `ADO_ORG`, `ADO_PROJECT`, `ADO_PIPELINE_ID`, and `ADO_PAT`; never raises to the caller. |
+| `jenkins/Jenkinsfile` | Legacy Jenkins pipeline that downloads/runs JMX files and uploads a summary. |
+| `jenkins/jmeter-pipeline.yml` | ADO pipeline that reads Cosmos, runs JMeter, uploads results, and starts NFT. |
+| `jenkins/nft-agent-pipeline.yml` | ADO pipeline that runs Ag NFT for a `docId`. |
+| `ag_report/agent.py` | Intended final reporting/ADO-defect entry point; currently raises `NotImplementedError`. |
+| `contracts/ag_read_output.py` | `AgReadOutput` and the low/medium/high risk contract. |
+| `contracts/nft_input.py` | `NftInput`, the Jenkins-to-NFT pointer. |
+| `contracts/nft_output.py` | `NftOutcome` and `NftOutput`, the NFT-to-report contract. |
+| `contracts/run_record.py` | `RunStatus`, `TestFile`, `Defect`, and `PrRunRecord`. |
+
+## 12. Configuration
+
+Copy `.env.example` to `.env` for local development:
+
+```powershell
+Copy-Item .env.example .env
+python -m pip install --user -r requirements.txt
+```
+
+Required production groups:
+
+- Azure OpenAI: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`,
+  `AZURE_OPENAI_DEPLOYMENT`.
+- Azure DevOps: `REPO_URL`, `GIT_TOKEN`; optional `REPO_BASE_BRANCH`.
+- Cosmos: `COSMOS_ENDPOINT`, `COSMOS_KEY`.
+- Blob: `AZURE_STORAGE_CONNECTION_STRING`.
+
+Optional:
+
+- `APPLICATIONINSIGHTS_CONNECTION_STRING` enables telemetry.
+- `AZURE_OPENAI_TIMEOUT` and `AZURE_OPENAI_MAX_RETRIES` bound model calls.
+- `POLL_INTERVAL_SEC` controls poller frequency.
+- `AG_READ_AGENTIC=true` enables agentic Ag Read.
+- `NFT_*` variables tune containers, SLAs, shock detection, and analysis mode.
+- `ADO_ORG`, `ADO_PROJECT`, `ADO_PIPELINE_ID`, `ADO_PAT` enable the NFT pipeline
+  trigger from Ag Write.
+
+Never commit `.env`, API keys, PATs, Cosmos keys, Storage connection strings, or
+Function keys.
+
+## 13. Useful local commands
+
+```powershell
+# Ag Read for one PR
+python -m ag_read.cli --pr-id 42 --verbose
+
+# Ag Read durable poller
+python -m ag_read.poller --once
+
+# Ag Write durable poller
+python -m ag_write.poller --once
+
+# Ag NFT from a saved contract JSON
+python -m ag_nft --input .\nft_input.json --no-llm --no-persist --no-handoff
+
+# Ag NFT from a Cosmos document
+python -m ag_nft --doc-id payments-api-42-a1b2c3d4
+
+# Ag NFT fully offline against a local storage directory
+python -m ag_nft --input .\nft_input.json --local-root .\store --no-llm
+```
+
+The test suite is mostly standard-library `unittest` and script-style tests. Run
+the focused tests first, for example:
+
+```powershell
+python -m unittest discover -s ag_nft -p "test_*.py"
+python ag_read\tests\test_risk_floor.py
+python ag_write\tests\test_negative.py
+```
+
+## 14. Important current limitations
+
+1. `ag_report/agent.py` is not implemented, so automatic ADO defect creation is
+   not complete in this checkout.
+2. `jenkins/integration.py` is a stub. The checked-in ADO YAML pipelines provide
+   the more complete execution path.
+3. `AgReadOutput` is intentionally descriptive; Ag Write owns coverage and the
+   REUSE/MODIFY/CREATE decision.
+4. LLM output is not trusted for final safety decisions. Ag Write validation and
+   Ag NFT evaluation are deterministic.
+5. The generated JMX currently contains the registered Function key as a default
+   property so it can run standalone. Treat generated scripts and Blob access as
+   sensitive; prefer pipeline overrides and restricted storage access.
+
+## 15. One complete example
+
+Assume PR `42` changes `src/payments/refund.py`.
+
+1. Azure DevOps starts `azure-pipelines.yml`.
+2. Ag Read fetches the PR and sees the changed file.
+3. The model returns:
+
+   ```json
+   {
+     "changed_components": ["payments/refund"],
+     "risk_level": "high",
+     "suggested_tests": ["POST /api/refund rejects unauthorized requests"],
+     "release_notes": "Refund authorization was tightened."
+   }
+   ```
+
+4. Cosmos receives:
+
+   ```text
+   id = payments-api-42-<commit>
+   status = writing
+   ```
+
+5. Ag Write checks the catalog. If no `payments/refund` test exists, it chooses
+   `CREATE`; if version `1.0` exists, it chooses `MODIFY` because the change is
+   high risk.
+6. The LLM proposes a bounded JMeter specification.
+7. The validator rejects unsafe values such as 10,000 threads or a filesystem
+   path. After a valid proposal, the renderer creates `payments-refund-v1.0.jmx`.
+8. The JMX is uploaded to Blob and added to `test_files` in Cosmos.
+9. Ag Write starts the JMeter ADO pipeline.
+10. JMeter writes `results.jtl` and logs.
+11. Ag NFT parses the samples. If p95 is 720 ms, the default 500 ms check fails.
+12. Ag NFT writes `nft_report.html` and `nft_report.json`, stores outcomes such as
+    `performance = fail`, and attempts the Ag Report handoff.
+13. Once Ag Report is implemented, it can turn the finding into an Azure DevOps
+    defect linked to the PR, report, commit, and test case.
+
+That is the complete intended lifecycle from PR trigger to non-functional-test
+report.
