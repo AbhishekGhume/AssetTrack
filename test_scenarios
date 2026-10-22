@@ -1,81 +1,1161 @@
-# AITestIQ - Complete Project Guide
+I’ll trace one concrete scenario through the actual implemented path: PR 42 changes `/api/refund`, Ag Read analyzes it, Ag Write generates a JMeter test, the pipeline runs it, and Ag NFT produces the final report. I’ll use the real functions in execution order and distinguish code that actually runs from the repository’s current stubs.
 
-This document explains the repository from installation through the end-to-end
-execution flow. It is based on the code currently present in this checkout.
+Read , lines 1 to 150
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_read\\graph.py",
+  "view_range": [
+    1,
+    150
+  ]
+}
 
-## 1. What the project does
+Read , lines 1 to 230
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_read\\fetch.py",
+  "view_range": [
+    1,
+    230
+  ]
+}
 
-AITestIQ is an AI-assisted test-impact and non-functional-test analysis system.
-Its intended flow is:
+Read , lines 120 to 230
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_read\\analyzer.py",
+  "view_range": [
+    120,
+    230
+  ]
+}
 
-1. A pull request (PR) becomes active in Azure DevOps.
-2. **Ag Read** downloads the PR change and asks an LLM to describe its impact and
-   risk.
-3. Ag Read stores that description in a per-PR document in **Azure Cosmos DB**.
-4. **Ag Write** decides whether to reuse, modify, or create a JMeter test.
-5. Ag Write validates the LLM proposal with deterministic rules, renders a `.jmx`
-   file, and stores it in **Azure Blob Storage**.
-6. An Azure DevOps/JMeter pipeline runs the generated JMeter file.
-7. **Ag NFT** reads JMeter `.jtl`/CSV/XML results, calculates performance metrics,
-   evaluates SLA rules, optionally asks an LLM for explanations, and writes an
-   HTML/JSON report.
-8. **Ag Report** is intended to log defects in Azure DevOps. In this checkout it is
-   still a stub.
+Read , lines 1 to 100
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_read\\persist.py",
+  "view_range": [
+    1,
+    100
+  ]
+}
 
-The system deliberately uses:
+Read , lines 1 to 110
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_read\\handoff.py",
+  "view_range": [
+    1,
+    110
+  ]
+}
 
-- **Cosmos DB** for small, queryable coordination state.
-- **Blob Storage** for large files such as diffs, JMX scripts, logs, and reports.
-- **Pydantic contracts** for data exchanged between agents.
-- **LangGraph** for deterministic multi-step workflows.
-- **Azure OpenAI** for reasoning and explanations.
-- **Deterministic guards** around LLM output so an invalid test is not stored.
+Read , lines 1 to 90
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\contracts\\ag_read_output.py",
+  "view_range": [
+    1,
+    90
+  ]
+}
 
-## 2. Repository map
+Read , lines 1 to 100
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_write\\agent.py",
+  "view_range": [
+    1,
+    100
+  ]
+}
 
-| Folder/file | Responsibility |
-|---|---|
-| [`contracts/`](contracts/) | Shared Pydantic data models. This is the API between agents. |
-| [`shared/`](shared/) | Azure configuration, Cosmos, Blob, LLM, and telemetry helpers. |
-| [`ag_read/`](ag_read/) | Reads Azure DevOps PR changes and produces `AgReadOutput`. |
-| [`ag_write/`](ag_write/) | Decides and generates JMeter tests from `AgReadOutput`. |
-| [`ag_nft/`](ag_nft/) | Parses and evaluates JMeter results and creates reports. |
-| [`ag_report/`](ag_report/) | Intended ADO defect/report integration; currently a stub. |
-| [`jenkins/`](jenkins/) | Pipeline definitions and ADO pipeline trigger helper. |
-| [`README.md`](README.md) | Short project overview and team/branching model. |
-| [`flow.md`](flow.md) | Design-level system flow. |
-| [`decision.md`](decision.md) | Design decisions and rationale. |
-| [`requirements.txt`](requirements.txt) | Python dependencies. |
-| [`azure-pipelines.yml`](azure-pipelines.yml) | Ag Read Azure DevOps pipeline. |
+Read , lines 70 to 360
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_write\\graph.py",
+  "view_range": [
+    70,
+    360
+  ]
+}
 
-## 3. Runtime data model: the Cosmos run record
+Read , lines 1 to 180
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_nft\\graph.py",
+  "view_range": [
+    1,
+    180
+  ]
+}
 
-The central coordination object is `PrRunRecord` in
-[`contracts/run_record.py`](contracts/run_record.py). Its deterministic ID is:
+Read , lines 1 to 170
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_nft\\agent.py",
+  "view_range": [
+    1,
+    170
+  ]
+}
+
+Read , lines 130 to 190
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_nft\\parsers.py",
+  "view_range": [
+    130,
+    190
+  ]
+}
+
+Read , lines 1 to 230
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_nft\\metrics.py",
+  "view_range": [
+    1,
+    230
+  ]
+}
+
+Read , lines 160 to 230
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_nft\\analyzer.py",
+  "view_range": [
+    160,
+    230
+  ]
+}
+
+Read , lines 1 to 55
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\ag_nft\\report.py",
+  "view_range": [
+    1,
+    55
+  ]
+}
+
+"Read" failed
+Completed with input: {
+  "path": "d:\\AITestIQ-repo-v1\\jenkins\\pipeline_trigger.py",
+  "view_range": [
+    1,
+    80
+  ]
+}
+Tool execution failed: Path does not exist
+
+Search Tools
+
+Requested chat rename
+Completed with input: {
+  "title": "End-to-end project flow",
+  "automatic": true
+}
+
+# Complete End-to-End Flow With Simple Example
+
+I’ll use this example:
+
+> A developer creates PR `42` in repository `payments-api`.  
+> The PR changes `src/payments/refund.py`, which handles `POST /api/refund`.
+
+The complete flow is:
 
 ```text
-<repo>-<pr_id>-<commit_sha>
+Azure DevOps PR
+    |
+    v
+Ag Read
+    |
+    v
+Cosmos DB run record
+    |
+    v
+Ag Write
+    |
+    v
+JMeter .jmx test in Blob Storage
+    |
+    v
+JMeter/Azure Pipeline
+    |
+    v
+JMeter result files
+    |
+    v
+Ag NFT
+    |
+    v
+HTML + JSON performance report
+    |
+    v
+Ag Report
 ```
 
-Example:
+`Ag Report` is currently only a stub in this checkout, so the flow ends at the Ag Report handoff attempt.
+
+---
+
+# 1. How the flow starts
+
+The main production trigger is the Azure DevOps pipeline:
+
+`azure-pipelines.yml`
+
+The important command executed by the pipeline is effectively:
+
+```powershell
+python -m ag_read.cli --pr-id 42 -v
+```
+
+This starts Python module execution.
+
+Python finds:
+
+`ag_read/cli.py`
+
+The execution begins here:
+
+```python
+if __name__ == "__main__":
+    main()
+```
+
+## 1.1 `main()`
+
+`main()` calls:
+
+```python
+sys.exit(run())
+```
+
+This means:
+
+1. Execute `run()`.
+2. Convert the returned integer into the process exit code.
+
+For example:
 
 ```text
-payments-api-42-a1b2c3d4
+0 = successful
+2 = configuration error
+3 = Azure DevOps fetch error
+4 = analysis error
 ```
 
-This makes a PR/commit run idempotent: running the same commit again updates the
-same document instead of creating a duplicate.
+## 1.2 `run()`
 
-The record contains:
+Inside `run()`:
+
+```python
+args = _parse_args(argv)
+```
+
+`_parse_args()` reads:
+
+```text
+--pr-id 42
+-v
+```
+
+So the resulting object is conceptually:
+
+```python
+args.pr_id = "42"
+args.verbose = True
+```
+
+Then logging is configured:
+
+```python
+logging.basicConfig(
+    level=logging.DEBUG if args.verbose else logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+```
+
+Because `-v` was passed, debug-level logging is enabled.
+
+Then telemetry is configured:
+
+```python
+configure_telemetry(service_name="ag_read")
+```
+
+If Application Insights is configured, logs and traces are sent there. Otherwise, logs remain local.
+
+Then the core pipeline starts:
+
+```python
+output = run_ag_read(args.pr_id)
+```
+
+So the call chain is now:
+
+```text
+ag_read.cli.main()
+    -> ag_read.cli.run()
+        -> ag_read.graph.run_ag_read("42")
+```
+
+---
+
+# 2. Ag Read starts the LangGraph workflow
+
+The main Ag Read workflow is in:
+
+`ag_read/graph.py`
+
+The graph is:
+
+```text
+START
+  |
+  v
+fetch
+  |
+  v
+analyze
+  |
+  v
+persist
+  |
+  v
+handoff
+  |
+  v
+END
+```
+
+## 2.1 `run_ag_read()`
+
+The function receives:
+
+```python
+run_ag_read(
+    pr_id="42",
+    client=None,
+    persist=True,
+)
+```
+
+Then it creates a telemetry span:
+
+```python
+with pipeline_run("ag_read", pr_id=str(pr_id)):
+```
+
+This groups logs for PR `42` together.
+
+Then the graph is built:
+
+```python
+app = build_graph()
+```
+
+`build_graph()` creates a `StateGraph`:
+
+```python
+graph = StateGraph(AgReadState)
+```
+
+It registers four nodes:
+
+```python
+graph.add_node("fetch", _fetch_node)
+graph.add_node("analyze", _analyze_node)
+graph.add_node("persist", _persist_node)
+graph.add_node("handoff", _handoff_node)
+```
+
+Then it connects them:
+
+```python
+graph.add_edge(START, "fetch")
+graph.add_edge("fetch", "analyze")
+graph.add_edge("analyze", "persist")
+graph.add_edge("persist", "handoff")
+graph.add_edge("handoff", END)
+```
+
+Finally:
+
+```python
+return graph.compile()
+```
+
+The compiled graph is executed:
+
+```python
+final_state = app.invoke(
+    {
+        "pr_id": "42",
+        "client": None,
+        "persist": True,
+    }
+)
+```
+
+The state initially looks like:
+
+```python
+{
+    "pr_id": "42",
+    "client": None,
+    "persist": True
+}
+```
+
+Each node adds more information to this state.
+
+---
+
+# 3. Fetching the PR change
+
+The first graph node is `_fetch_node()`:
+
+```python
+def _fetch_node(state):
+    pr_id = state["pr_id"]
+```
+
+For our example:
+
+```python
+pr_id = "42"
+```
+
+Then:
+
+```python
+change = fetch_pr_change(
+    pr_id,
+    client=state.get("client")
+)
+```
+
+This calls:
+
+`ag_read/fetch.py`
+
+---
+
+## 3.1 Creating the Azure DevOps client
+
+Inside `fetch_pr_change()`:
+
+```python
+client = client or AdoClient.from_env()
+```
+
+Because no client was injected, `AdoClient.from_env()` is called.
+
+That loads:
+
+- `REPO_URL`
+- `GIT_TOKEN`
+- `REPO_BASE_BRANCH`
+
+from environment variables.
+
+`AdoClient.__init__()` checks:
+
+```python
+if not ado.pat:
+    raise FetchError("GIT_TOKEN ... is not set.")
+```
+
+If the Azure DevOps PAT is missing, the flow stops here with a clear error.
+
+The base REST URL becomes something like:
+
+```text
+https://dev.azure.com/my-org/my-project/_apis/git/repositories/payments-api
+```
+
+The session is configured:
+
+```python
+self._session.auth = ("", ado.pat)
+```
+
+Azure DevOps PAT authentication uses an empty username and PAT as the password.
+
+---
+
+## 3.2 Reading PR metadata
+
+The function calls:
+
+```python
+pr = client.get_pr(pr_id)
+```
+
+This calls:
+
+```python
+return self._get(f"/pullRequests/{pr_id}")
+```
+
+For PR `42`, the request is conceptually:
+
+```text
+GET .../_apis/git/repositories/payments-api/pullRequests/42
+```
+
+The `_get()` helper adds:
+
+```python
+"api-version": "7.1"
+```
+
+It also applies a 30-second HTTP timeout:
+
+```python
+self._session.get(url, params=params, timeout=30)
+```
+
+If Azure DevOps returns an HTTP error, this code executes:
+
+```python
+resp.raise_for_status()
+```
+
+Then the error is converted into:
+
+```python
+FetchError(...)
+```
+
+From the PR response, the code extracts:
+
+```python
+commit_sha = pr["lastMergeSourceCommit"]["commitId"]
+base_commit_sha = pr["lastMergeTargetCommit"]["commitId"]
+source_ref = pr["sourceRefName"]
+target_ref = pr["targetRefName"]
+repo_name = pr["repository"]["name"]
+```
+
+Example values:
+
+```text
+repo_name = "payments-api"
+commit_sha = "abc123"
+base_commit_sha = "def456"
+source_ref = "refs/heads/feature/refund"
+target_ref = "refs/heads/master"
+```
+
+---
+
+## 3.3 Finding the latest PR iteration
+
+The function calls:
+
+```python
+iteration_id = client.latest_iteration_id(pr_id)
+```
+
+Inside:
+
+```python
+data = self._get(f"/pullRequests/{pr_id}/iterations")
+```
+
+Suppose Azure DevOps returns iterations:
 
 ```json
 {
-  "id": "payments-api-42-a1b2c3d4",
+  "value": [
+    {"id": 1},
+    {"id": 2},
+    {"id": 3}
+  ]
+}
+```
+
+Then:
+
+```python
+return max(it["id"] for it in iterations)
+```
+
+returns:
+
+```text
+iteration_id = 3
+```
+
+This ensures the latest version of the PR is analyzed.
+
+If there are no iterations:
+
+```python
+raise FetchError(f"PR {pr_id} has no iterations.")
+```
+
+---
+
+## 3.4 Reading changed files
+
+Next:
+
+```python
+entries = client.iteration_changes(pr_id, iteration_id)
+```
+
+This calls Azure DevOps:
+
+```text
+GET .../pullRequests/42/iterations/3/changes
+```
+
+Suppose Azure DevOps returns:
+
+```json
+{
+  "changeEntries": [
+    {
+      "changeType": "edit",
+      "item": {
+        "path": "/src/payments/refund.py",
+        "isFolder": false
+      }
+    }
+  ]
+}
+```
+
+The code loops:
+
+```python
+for entry in entries:
+```
+
+Then extracts:
+
+```python
+item = entry.get("item") or {}
+path = item.get("path", "")
+```
+
+For our example:
+
+```text
+path = "/src/payments/refund.py"
+```
+
+Folders are skipped:
+
+```python
+if not path or item.get("isFolder"):
+    continue
+```
+
+The change type is normalized:
+
+```python
+change_type = _normalise_change_type(
+    entry.get("changeType", "")
+)
+```
+
+So:
+
+```text
+"EDIT" -> "edit"
+```
+
+---
+
+## 3.5 Reading the new file content
+
+The code checks:
+
+```python
+if change_type in _CONTENT_CHANGE_TYPES and len(changed_files) < MAX_FILES:
+```
+
+`_CONTENT_CHANGE_TYPES` contains:
+
+```python
+{"add", "edit", "rename", "edit, rename"}
+```
+
+Our file is an edit, so content is fetched:
+
+```python
+content = client.file_content(path, commit_sha)
+```
+
+This asks Azure DevOps for:
+
+```text
+/src/payments/refund.py
+```
+
+at commit:
+
+```text
+abc123
+```
+
+The result might be:
+
+```python
+new_content = """
+def refund(user, payment):
+    if not user.can_refund:
+        raise PermissionError("Not authorized")
+    return payment.refund()
+"""
+```
+
+If the content is larger than 20,000 characters:
+
+```python
+if len(content) > MAX_FILE_CHARS:
+    content = content[:MAX_FILE_CHARS]
+    truncated = True
+```
+
+This prevents huge files from consuming unlimited model context.
+
+---
+
+## 3.6 Reading the old file content
+
+For edits, the base version is also fetched:
+
+```python
+old = client.file_content(path, base_commit_sha)
+```
+
+This allows the risk guard to compare old and new versions.
+
+Example:
+
+```python
+old_content = """
+def refund(user, payment):
+    return payment.refund()
+"""
+```
+
+Then:
+
+```python
+old_content_available = True
+```
+
+The final `ChangedFile` is created:
+
+```python
+ChangedFile(
+    path="/src/payments/refund.py",
+    change_type="edit",
+    new_content=new_content,
+    truncated=False,
+    old_content=old_content,
+    old_content_available=True,
+)
+```
+
+---
+
+## 3.7 Creating `PrChange`
+
+After all files are processed, the code creates:
+
+```python
+change = PrChange(
+    repo=repo_name,
+    pr_id=str(pr_id),
+    commit_sha=commit_sha,
+    base_branch=target_ref.replace("refs/heads/", ""),
+    head_branch=source_ref.replace("refs/heads/", ""),
+    title=pr.get("title", ""),
+    changed_files=changed_files,
+)
+```
+
+For our example:
+
+```python
+PrChange(
+    repo="payments-api",
+    pr_id="42",
+    commit_sha="abc123",
+    base_branch="master",
+    head_branch="feature/refund",
+    changed_files=[
+        ChangedFile(
+            path="/src/payments/refund.py",
+            change_type="edit",
+            ...
+        )
+    ]
+)
+```
+
+The `_fetch_node()` returns:
+
+```python
+return {"change": change}
+```
+
+The LangGraph state now contains:
+
+```python
+{
+    "pr_id": "42",
+    "client": None,
+    "persist": True,
+    "change": PrChange(...)
+}
+```
+
+---
+
+# 4. Ag Read analyzes the change
+
+The next node is `_analyze_node()`:
+
+```python
+output = analyze_change(state["change"])
+```
+
+This calls:
+
+`ag_read/analyzer.py`
+
+---
+
+## 4.1 Empty-change check
+
+The first important check is:
+
+```python
+if change.is_empty:
+```
+
+`change.is_empty` is true only if no files changed.
+
+Our PR has one changed file, so processing continues.
+
+---
+
+## 4.2 Building the prompt
+
+The analyzer builds a prompt using:
+
+```python
+user_prompt = _build_user_prompt(change)
+```
+
+The prompt includes:
+
+```text
+Repository: payments-api
+Pull request: 42 - Refund authorization change
+Branches: feature/refund -> master
+Changed files (1):
+
+----- /src/payments/refund.py (edit) -----
+
+def refund(user, payment):
+    if not user.can_refund:
+        raise PermissionError("Not authorized")
+    return payment.refund()
+```
+
+The system prompt instructs the model to return only JSON like:
+
+```json
+{
+  "changed_components": ["payments/refund"],
+  "risk_level": "high",
+  "suggested_tests": [
+    "Verify unauthorized users cannot issue refunds",
+    "Verify authorized users can issue refunds"
+  ],
+  "release_notes": "Refund authorization was added."
+}
+```
+
+Then the LLM is called:
+
+```python
+raw = llm.complete(SYSTEM_PROMPT, user_prompt)
+```
+
+`LLMClient.complete()` in `shared/llm.py` sends two messages:
+
+```python
+[
+    SystemMessage(content=system_prompt),
+    HumanMessage(content=user_prompt),
+]
+```
+
+Azure OpenAI returns text.
+
+---
+
+## 4.3 Removing code fences
+
+Sometimes the model returns:
+
+````text
+```json
+{
+  "risk_level": "high"
+}
+```
+````
+
+The function:
+
+```python
+_strip_code_fence(raw)
+```
+
+removes the Markdown wrapper so the result becomes plain JSON.
+
+---
+
+## 4.4 Parsing model JSON
+
+Then:
+
+```python
+data = json.loads(_strip_code_fence(raw))
+```
+
+If the model returns invalid JSON:
+
+```text
+This change is high risk.
+```
+
+then `json.loads()` fails and raises:
+
+```python
+AnalyzerError(...)
+```
+
+The pipeline does not silently accept this response.
+
+---
+
+## 4.5 Converting to `AgReadOutput`
+
+The code creates:
+
+```python
+AgReadOutput(
+    repo=change.repo,
+    pr_id=change.pr_id,
+    commit_sha=change.commit_sha,
+    changed_components=list(data.get("changed_components", [])),
+    risk_level=_normalise_risk(data["risk_level"]),
+    suggested_tests=list(data.get("suggested_tests", [])),
+    release_notes=str(data.get("release_notes", "")),
+    changed_files=change.file_paths,
+)
+```
+
+For our example:
+
+```python
+AgReadOutput(
+    repo="payments-api",
+    pr_id="42",
+    commit_sha="abc123",
+    changed_components=["payments/refund"],
+    risk_level="high",
+    suggested_tests=[
+        "Verify unauthorized users cannot issue refunds",
+        "Verify authorized users can issue refunds"
+    ],
+    release_notes="Refund authorization was added.",
+    changed_files=["/src/payments/refund.py"]
+)
+```
+
+The contract is defined in:
+
+`contracts/ag_read_output.py`
+
+The important field is:
+
+```python
+risk_level: Literal["low", "medium", "high"]
+```
+
+If the model returns:
+
+```json
+{
+  "risk_level": "critical"
+}
+```
+
+Pydantic rejects it.
+
+---
+
+# 5. Ag Read applies risk guards
+
+After the model produces an output, the analyzer applies deterministic guards.
+
+## 5.1 Cosmetic guard
+
+The code checks:
+
+```python
+if output.risk_level.strip().lower() != "low" \
+        and is_cosmetic_change(change):
+```
+
+For our PR, the changed code is actual authorization logic, so:
+
+```python
+is_cosmetic_change(change) == False
+```
+
+The risk remains `high`.
+
+If the PR had only changed a log message, the guard could force the risk down to `low`.
+
+## 5.2 Sensitive path floor
+
+The analyzer then applies:
+
+```python
+risk_level = apply_risk_floor(change, output.risk_level)
+```
+
+Our file is:
+
+```text
+/src/payments/refund.py
+```
+
+The sensitive-path patterns detect:
+
+```text
+payment
+refund
+```
+
+So the minimum risk is `high`.
+
+Even if the model incorrectly returned `low`, the guard would change it to `high`.
+
+The final output is returned:
+
+```python
+return output
+```
+
+The `_analyze_node()` returns:
+
+```python
+return {"output": output}
+```
+
+The graph state now contains:
+
+```python
+{
+    "pr_id": "42",
+    "change": PrChange(...),
+    "output": AgReadOutput(
+        repo="payments-api",
+        pr_id="42",
+        commit_sha="abc123",
+        risk_level="high",
+        ...
+    )
+}
+```
+
+---
+
+# 6. Ag Read stores the Cosmos run record
+
+The next graph node is `_persist_node()`:
+
+```python
+if not state.get("persist", True):
+```
+
+Because `persist=True`, it continues.
+
+Then:
+
+```python
+record = persist_record(
+    state["change"],
+    state["output"]
+)
+```
+
+This calls:
+
+`ag_read/persist.py`
+
+---
+
+## 6.1 Creating the record ID
+
+The function creates:
+
+```python
+record_id = f"{change.repo}-{change.pr_id}-{change.commit_sha}"
+```
+
+For our example:
+
+```text
+payments-api-42-abc123
+```
+
+This ID is deterministic.
+
+If the same PR and commit are processed twice, the same Cosmos record is updated rather than duplicated.
+
+## 6.2 Creating the record
+
+Then:
+
+```python
+record = PrRunRecord(
+    id=record_id,
+    repo=change.repo,
+    pr_id=change.pr_id,
+    commit_sha=change.commit_sha,
+    base_branch=change.base_branch,
+    head_branch=change.head_branch,
+    status=RunStatus.ANALYZING,
+    created_at=now,
+    updated_at=now,
+    ag_read=output,
+)
+```
+
+The record looks conceptually like:
+
+```json
+{
+  "id": "payments-api-42-abc123",
   "repo": "payments-api",
   "pr_id": "42",
-  "commit_sha": "a1b2c3d4",
-  "status": "writing",
-  "ag_read": {},
+  "commit_sha": "abc123",
+  "base_branch": "master",
+  "head_branch": "feature/refund",
+  "status": "analyzing",
+  "ag_read": {
+    "changed_components": ["payments/refund"],
+    "risk_level": "high",
+    "suggested_tests": [
+      "Verify unauthorized users cannot issue refunds"
+    ]
+  },
   "test_files": [],
   "nft_outcomes": [],
   "suggestions": [],
@@ -83,221 +1163,322 @@ The record contains:
 }
 ```
 
-The status is the coordination baton:
+## 6.3 Writing to Cosmos
 
-| Status | Meaning |
-|---|---|
-| `analyzing` | Ag Read is creating the initial record. |
-| `writing` | Ag Read is complete; Ag Write may process it. |
-| `testing` | Ag Write succeeded and test execution/analysis can proceed. |
-| `complete` | All planned reporting work is complete. |
-| `failed` | A phase failed closed or was marked failed. |
+Then:
 
-`CosmosStore` uses `/repo` as its partition key. Large artifacts are not embedded
-in this document; the record stores URLs or metadata pointing to Blob Storage.
-
-## 4. How the project is triggered
-
-There are several supported trigger mechanisms.
-
-### 4.1 Production Ag Read trigger: Azure DevOps branch policy
-
-[`azure-pipelines.yml`](azure-pipelines.yml) has `trigger: none` and `pr: none`.
-For Azure Repos, the intended trigger is an Azure DevOps **branch policy**:
-
-1. Open the target branch policies.
-2. Add this pipeline as a **Build validation** policy.
-3. When a PR targets that branch, Azure DevOps starts the pipeline.
-4. The pipeline runs:
-
-```powershell
-python -m ag_read.cli --pr-id <pull-request-id> -v
+```python
+store.upsert(record)
 ```
 
-The pipeline maps secrets from the `aitestiq-secrets` variable group into
-environment variables.
+This calls `shared/cosmos.py`.
 
-### 4.2 Ag Read polling trigger
+`CosmosStore.upsert()` serializes the Pydantic object:
 
-The alternative is:
-
-```powershell
-python -m ag_read.poller --once
-python -m ag_read.poller
+```python
+body = record.model_dump(mode="json")
 ```
 
-[`ag_read/poller.py`](ag_read/poller.py) lists active PRs through Azure DevOps.
-For each PR it reads `lastMergeSourceCommit.commitId` and checks Cosmos. A PR is
-processed only if the exact `<repo>-<pr>-<commit>` record does not already exist.
-The normal loop sleeps for `POLL_INTERVAL_SEC` seconds, defaulting to 60.
+Then writes:
 
-### 4.3 Ag Write trigger
-
-Ag Read's handoff has two paths:
-
-1. **Direct path:** `ag_read/handoff.py` imports `ag_write.agent.run()` and calls it.
-2. **Durable path:** Ag Read first sets the Cosmos status to `writing`.
-   [`ag_write/poller.py`](ag_write/poller.py) finds `writing` records and runs
-   `ag_write.agent.run_from_record()`.
-
-The poller uses Cosmos ETags in `claim_if_writing()` so two workers do not process
-the same record successfully.
-
-Run it with:
-
-```powershell
-python -m ag_write.poller --once
-python -m ag_write.poller
+```python
+self._container.upsert_item(body)
 ```
 
-### 4.4 JMeter/NFT trigger
+If a transient connection failure happens, it retries up to four times.
 
-On successful Ag Write, [`ag_write/agent.py`](ag_write/agent.py) calls
-`jenkins.pipeline_trigger.trigger_nft_pipeline(doc_id)`. This POSTs to an Azure
-DevOps pipeline and passes the Cosmos document ID as the `docId` template
-parameter.
+The `_persist_node()` returns:
 
-The JMeter pipeline is [`jenkins/jmeter-pipeline.yml`](jenkins/jmeter-pipeline.yml).
-It:
-
-1. Reads the Cosmos run record.
-2. Selects `test_files` whose type is `jmeter`.
-3. Downloads only those `.jmx` files from `test-scripts`.
-4. Runs JMeter.
-5. Uploads results/logs and writes a `jmeter_pipeline` block to Cosmos.
-6. Starts [`jenkins/nft-agent-pipeline.yml`](jenkins/nft-agent-pipeline.yml) with
-   the same `docId`.
-
-The NFT pipeline runs:
-
-```powershell
-python -m ag_nft --doc-id <cosmos-document-id> -v
+```python
+return {"record": record}
 ```
 
-### 4.5 Ag NFT blob-poller trigger
+---
 
-Instead of the ADO NFT pipeline, use:
+# 7. Ag Read hands off to Ag Write
 
-```powershell
-python -m ag_nft.poller --once
-python -m ag_nft.poller
-python -m ag_nft.poller --local-root .\store --once
+The final Ag Read graph node is `_handoff_node()`:
+
+```python
+handoff_to_ag_write(
+    state["record"],
+    state["output"]
+)
 ```
 
-Jenkins can place an `nft_input.json` manifest next to its result files in the
-`pipeline-logs` container. The NFT poller treats that manifest as the completion
-marker, so it does not analyse a half-uploaded run. It skips a run when the final
-`nft_report.json` already exists.
+This calls:
 
-## 5. End-to-end flow: Ag Read
+`ag_read/handoff.py`
 
-The LangGraph in [`ag_read/graph.py`](ag_read/graph.py) is:
+## 7.1 Changing status to `writing`
+
+The first operation is:
+
+```python
+record.status = RunStatus.WRITING
+```
+
+The record status changes:
 
 ```text
-START -> fetch -> analyze -> persist -> handoff -> END
+analyzing -> writing
 ```
 
-### Step 1: fetch
+Then it is persisted again:
 
-[`ag_read/fetch.py`](ag_read/fetch.py) uses `AdoClient` and the Azure DevOps REST
-API:
+```python
+store.upsert(record)
+```
 
-1. `get_pr()` reads PR metadata, branches, and source/target commits.
-2. `latest_iteration_id()` selects the newest PR iteration.
-3. `iteration_changes()` lists changed paths and change types.
-4. `file_content()` reads new content for added/edited/renamed files.
-5. It also attempts to read the old/base content for edits.
-
-Safety limits are `MAX_FILE_CHARS = 20_000` per file and `MAX_FILES = 50`.
-Deleted files generally have no new content to fetch.
-
-The result is an internal `PrChange` containing `ChangedFile` objects.
-
-### Step 2: analyze
-
-[`ag_read/analyzer.py`](ag_read/analyzer.py) sends bounded changed-file content to
-Azure OpenAI. The model must return JSON such as:
+Now Cosmos contains:
 
 ```json
 {
-  "changed_components": ["payments/refund"],
-  "risk_level": "high",
-  "suggested_tests": ["Verify refund authorization and duplicate handling"],
-  "release_notes": "Refund authorization was changed."
+  "id": "payments-api-42-abc123",
+  "status": "writing"
 }
 ```
 
-`_coerce_output()` adds repository, PR, commit, and changed-file identity and
-validates the result as `contracts.AgReadOutput`.
+This status tells Ag Write:
 
-An empty PR short-circuits without an LLM call. Optional agentic analysis is
-enabled only with `AG_READ_AGENTIC=true`; the default is the cheaper one-call
-path.
+> This record is ready to process.
 
-### Step 3: deterministic risk guards
+## 7.2 Direct Ag Write call
 
-[`ag_read/risk_guard.py`](ag_read/risk_guard.py) protects against model mistakes:
+Then the code tries:
 
-- Cosmetic-only changes can be forced down to `low`.
-- Sensitive paths such as `auth`, `payment`, `database`, and public API paths have
-  a minimum risk floor.
-- The floor only raises risk; it never hides a risky change.
-
-For example, a model saying `low` for `src/auth/login.py` is raised to `high`.
-
-### Step 4: persist
-
-[`ag_read/persist.py`](ag_read/persist.py) creates a `PrRunRecord` with status
-`analyzing`, sets `ag_read`, and calls `CosmosStore.upsert()`.
-
-### Step 5: handoff
-
-[`ag_read/handoff.py`](ag_read/handoff.py):
-
-1. Changes the record status to `writing` and upserts it.
-2. Attempts the direct Ag Write call.
-3. Logs failures without making Ag Read fail; the Ag Write poller remains the
-   durable recovery mechanism.
-
-## 6. End-to-end flow: Ag Write
-
-The main implementation is [`ag_write/graph.py`](ag_write/graph.py):
-
-```text
-START -> decide
-           |-- no testable change -> finalize
-           |-- REUSE              -> reuse -> finalize
-           |-- CREATE/MODIFY      -> generate_validate -> render_store -> finalize
+```python
+from ag_write.agent import run as ag_write_run
+ag_write_run(output)
 ```
 
-### 6.1 Preflight decision
+This is the fast, direct path.
 
-[`ag_write/coverage.py`](ag_write/coverage.py) performs the decision before any
-LLM call:
+If Ag Write is unavailable, the error is logged. The `writing` status remains in Cosmos so the Ag Write poller can process it later.
 
-- No changed component/file/test hint: skip.
-- No catalog entry: `CREATE`.
-- Catalog hit plus `low` risk: `REUSE`, zero LLM calls.
-- Catalog hit plus `medium`/`high` risk: `MODIFY`, invoke the LLM.
+The Ag Read graph finishes:
 
-The catalog key is derived from a stable component name, not from a model-guessed
-endpoint.
+```python
+return final_state["output"]
+```
 
-### 6.2 Catalog
+At this point:
 
-[`ag_write/catalog.py`](ag_write/catalog.py) stores test identity and versions.
-Important helpers are:
+```text
+Ag Read complete
+Cosmos status = writing
+```
 
-- `component_key()` - stable lookup key.
-- `stable_test_name()` - stable generated test name.
-- `bump_minor()` - creates versions such as `1.0`, `1.1`.
-- `find_active_by_key()` - finds the current test.
-- `register()`/superseding operations - record the new active version.
+---
 
-### 6.3 Generate
+# 8. Ag Write starts
 
-[`ag_write/generator.py`](ag_write/generator.py) asks Azure OpenAI for a strict
-`TestSpecification` JSON object. The specification contains:
+Ag Write has two entry paths.
+
+## Direct path
+
+```python
+ag_write.agent.run(output)
+```
+
+## Durable path
+
+The poller finds records with:
+
+```text
+status == "writing"
+```
+
+Then calls:
+
+```python
+run_from_record(record_id, repo)
+```
+
+The durable path is safer if the direct call fails or the services run separately.
+
+The main file is:
+
+`ag_write/agent.py`
+
+---
+
+## 8.1 Loading the record
+
+`run_from_record()` does:
+
+```python
+store = CosmosStore.from_env()
+```
+
+Then:
+
+```python
+record = store.get(record_id, repo)
+```
+
+For our example:
+
+```python
+record_id = "payments-api-42-abc123"
+repo = "payments-api"
+```
+
+If the record does not exist:
+
+```python
+raise ValueError(...)
+```
+
+If the record has no `ag_read` section:
+
+```python
+raise ValueError(...)
+```
+
+Otherwise:
+
+```python
+_run_with_clients(record.ag_read, record, store)
+```
+
+---
+
+## 8.2 Creating Azure clients
+
+`_run_with_clients()` creates:
+
+```python
+blob = BlobStore.from_env()
+catalog = TestCatalog.from_env()
+api_registry = ApiRegistry.from_env()
+```
+
+These are used for:
+
+- Blob Storage
+- Existing test catalog
+- Real API endpoint lookup
+
+Depending on the configured engine, Ag Write uses either:
+
+```text
+agent = autonomous tool-calling implementation
+pipeline = deterministic LangGraph implementation
+```
+
+The deterministic graph is in:
+
+`ag_write/graph.py`
+
+---
+
+# 9. Ag Write decides `CREATE`, `MODIFY`, or `REUSE`
+
+The first important Ag Write node is `_decide_node()`:
+
+```python
+ag_read = state["ag_read_output"]
+```
+
+For our example:
+
+```python
+ag_read.risk_level = "high"
+ag_read.changed_components = ["payments/refund"]
+```
+
+Then:
+
+```python
+if not should_consider_change(ag_read):
+```
+
+`should_consider_change()` returns true because the PR has changed components and changed files.
+
+Then:
+
+```python
+action, key, component, existing = decide_action_preflight(
+    ag_read,
+    catalog,
+    api_registry,
+)
+```
+
+The decision works like this:
+
+```text
+No existing catalog test -> CREATE
+Existing test + low risk -> REUSE
+Existing test + medium/high risk -> MODIFY
+```
+
+## Example A: no existing test
+
+Suppose the catalog has no `payments/refund` test.
+
+Result:
+
+```python
+action = "CREATE"
+```
+
+## Example B: existing version 1.0
+
+Suppose the catalog contains:
+
+```text
+payments-refund v1.0
+```
+
+Because the risk is high:
+
+```python
+action = "MODIFY"
+```
+
+The graph routes the action:
+
+```python
+return "reuse" if state.get("action") == "REUSE" else "generate"
+```
+
+For our example, the graph goes to:
+
+```text
+generate_validate
+```
+
+---
+
+# 10. Ag Write asks the LLM for a test specification
+
+The function `_generate_validate_node()` runs:
+
+```python
+for attempt in range(1, MAX_ATTEMPTS + 1):
+```
+
+`MAX_ATTEMPTS` is `3`.
+
+The first call is:
+
+```python
+spec = generate_specification(
+    state["ag_read_output"],
+    llm=llm,
+    feedback=feedback,
+)
+```
+
+This calls:
+
+`ag_write/generator.py`
+
+The model is asked to return a `TestSpecification`.
+
+A valid response might be:
 
 ```json
 {
@@ -305,414 +1486,1543 @@ Important helpers are:
   "action": "CREATE",
   "script_type": "JMETER",
   "template": "standard-jmeter-template",
-  "scenario": {"name": "Refund", "method": "POST", "path": "/api/refund"},
-  "workload": {"threads": 10, "ramp_up_seconds": 30, "duration_seconds": 120},
-  "assertions": [{"type": "response_success", "expected": true}]
+  "scenario": {
+    "name": "Refund authorization",
+    "method": "POST",
+    "path": "/api/refund"
+  },
+  "workload": {
+    "threads": 10,
+    "ramp_up_seconds": 30,
+    "duration_seconds": 60
+  },
+  "assertions": [
+    {
+      "type": "response_success",
+      "expected": true
+    }
+  ]
 }
 ```
 
-`_strip_code_fence()` handles a model response wrapped in ```json fences.
-`_coerce_spec()` parses JSON and applies Pydantic validation.
+`_coerce_spec()` does:
 
-### 6.4 Deterministic validation and fail-closed behavior
-
-[`ag_write/validators.py`](ag_write/validators.py) is the safety boundary:
-
-- only `JMETER` is allowed;
-- only the approved `standard-jmeter-template` is allowed;
-- HTTP methods are allow-listed;
-- endpoint paths must begin with `/`;
-- threads are capped at 1,000;
-- ramp-up and duration are capped at 3,600 seconds;
-- at least one approved assertion is required.
-
-The graph allows at most three generation attempts. Validator errors are fed back
-to the model on the next attempt. If all three fail, the run is marked failed and
-nothing is rendered or stored.
-
-### 6.5 API registry
-
-[`ag_write/api_registry.py`](ag_write/api_registry.py) stores the real endpoint
-for a repository: host, route, method, content type, expected status, custom
-headers, Azure Functions key location, and optional request-body Blob URL.
-
-This prevents the LLM from inventing a route. The registry prefers an
-`api_catalog` Cosmos container and can fall back to `test_catalog`.
-
-### 6.6 Render and store
-
-[`ag_write/renderer.py`](ag_write/renderer.py) deterministically generates a
-complete JMeter 5.x XML plan. It includes:
-
-- target host/protocol/port variables;
-- HTTP defaults;
-- content-type and required headers;
-- optional Azure Functions key;
-- the registered endpoint path/method;
-- embedded request body;
-- response assertions;
-- result writer and summary listeners.
-
-The generated `.jmx` is uploaded to Blob container `test-scripts`. A `TestFile`
-is appended to the Cosmos record with its path, URL, action, endpoint, method, and
-workload metadata. The record is then moved to `testing` on success.
-
-### 6.7 REUSE example
-
-Suppose the catalog already contains `payments-refund` version `1.0`, and a PR
-only changes logging. Ag Write does not call the LLM. It appends a `REUSE`
-`TestFile` pointing to the existing Blob URL. This saves cost and avoids
-unnecessary test versions.
-
-## 7. JMeter execution
-
-The generated file is a normal non-interactive JMeter test plan. The ADO pipeline
-downloads it and runs a command equivalent to:
-
-```text
-jmeter -n -t test.jmx -l results.jtl -j jmeter.log -e -o html-report
+```python
+data = json.loads(...)
 ```
 
-The result files and logs are uploaded under a run-specific Blob path. The
-pipeline records the paths in the Cosmos `jmeter_pipeline` block so Ag NFT can
-find them later.
+Then:
 
-The legacy [`jenkins/Jenkinsfile`](jenkins/Jenkinsfile) is an alternative Jenkins
-implementation. It downloads all `.jmx` files, executes them, creates a
-`run-summary.json`, and uploads it. The repository's Python
-[`jenkins/integration.py`](jenkins/integration.py) remains a stub and raises
-`NotImplementedError`.
-
-## 8. End-to-end flow: Ag NFT
-
-The graph in [`ag_nft/graph.py`](ag_nft/graph.py) is:
-
-```text
-START -> load -> evaluate -> analyze -> report -> persist -> handoff -> complete -> END
+```python
+return TestSpecification.model_validate(data)
 ```
 
-### 8.1 Input resolution
+The model is validated against:
 
-`ag_nft.agent.run()` accepts a validated `NftInput`.
-`run_from_doc()` instead reads the Cosmos document, extracts
-`jmeter_pipeline.results_url` and `logs_url`, and builds the `NftInput`.
+`ag_write/schemas.py`
 
-### 8.2 Load and parse
+That schema requires:
 
-[`ag_nft/parsers.py`](ag_nft/parsers.py) reads `.jtl`, `.csv`, and `.xml` result
-formats and converts each request into a tool-neutral `Sample`:
-
-```text
-timestamp, elapsed milliseconds, label, pass/fail, thread count, response code
+```python
+action in {"REUSE", "MODIFY", "CREATE"}
+script_type == "JMETER"
+method in {"GET", "POST", "PUT", "DELETE", "PATCH"}
+threads > 0
+ramp_up_seconds > 0
+duration_seconds > 0
 ```
 
-[`ag_nft/metrics.py`](ag_nft/metrics.py) calculates:
+---
 
-- count and failures;
-- error percentage;
-- average, p50, p95, p99, and maximum latency;
-- throughput in requests per second;
-- per-label statistics;
-- time windows;
-- scaling efficiency;
-- shock-spike and recovery behavior;
-- common error signatures.
+# 11. Ag Write deterministically validates the specification
 
-### 8.3 Deterministic evaluation
+After Pydantic validation, the graph calls:
 
-[`ag_nft/evaluate.py`](ag_nft/evaluate.py) compares metrics with `NftSettings`.
-Default examples include:
-
-- p95 target: 500 ms;
-- p99 target: 1,000 ms;
-- error-rate target: 1%;
-- scaling efficiency minimum: 0.6;
-- scaling latency-growth maximum: 3x;
-- shock error-rate tolerance: 5%.
-
-The result is a list of immutable rule checks and category outcomes:
-`performance`, `load`, `scalability`, and `shock`.
-
-The LLM cannot change these pass/fail decisions.
-
-### 8.4 Explanations
-
-[`ag_nft/analyzer.py`](ag_nft/analyzer.py) explains the deterministic evaluation.
-It supports:
-
-- `tools` mode: a bounded tool-calling analysis;
-- `digest` mode: one full-facts model call;
-- rule-based fallback if LLM is disabled or unavailable.
-
-Set `NFT_USE_LLM=false` for an entirely deterministic offline analysis.
-
-### 8.5 Report
-
-[`ag_nft/report.py`](ag_nft/report.py) produces:
-
-```text
-automation-output/<repo>/<pr>/<commit>/<run_id>/nft_report.html
-automation-output/<repo>/<pr>/<commit>/<run_id>/nft_report.json
+```python
+errors = validate_specification(spec)
 ```
 
-The HTML includes outcomes, checks, measurements, findings, suggestions, and
-limitations. The JSON is machine-readable and is also used as a future passing
-baseline.
+This is in:
 
-The JSON completion marker is written last. This is important: a poller does not
-mistake a partially completed run for a successful one.
+`ag_write/validators.py`
 
-### 8.6 Persist and handoff
+## 11.1 Script type check
 
-[`ag_nft/handoff.py`](ag_nft/handoff.py) writes outcomes and suggestions back into
-the existing Cosmos record, then attempts `ag_report.agent.run()`.
+```python
+if spec.script_type != "JMETER":
+```
 
-Both operations are best effort because the report is already safely in Blob
-Storage. In the current checkout Ag Report raises `NotImplementedError`, so the
-handoff logs that it is not implemented.
+A Python or shell test is rejected.
 
-## 9. Contracts: what crosses boundaries
+## 11.2 Action check
 
-| Contract | Producer | Consumer | Main fields |
-|---|---|---|---|
-| `AgReadOutput` | Ag Read | Ag Write | repo, PR, commit, components, risk, test hints |
-| `NftInput` | Jenkins/JMeter pipeline | Ag NFT | result/log URLs plus run identity |
-| `NftOutput` | Ag NFT | Ag Report | outcomes, suggestions, report URL |
-| `PrRunRecord` | Ag Read, then each agent | all durable stages | lifecycle and per-agent sections |
+```python
+if spec.action not in {"REUSE", "MODIFY", "CREATE"}:
+```
 
-The agents do not import each other's internal working models. They share only
-these contract models and the Cosmos record.
+Unknown actions are rejected.
 
-## 10. Shared infrastructure files and functions
+## 11.3 Template check
 
-### `shared/config.py`
+```python
+if spec.template not in APPROVED_TEMPLATES:
+```
 
-- `_require()` reads a required environment variable or raises `ConfigError`.
-- `_env_float()` and `_env_int()` parse optional numeric settings.
-- `AzureOpenAIConfig.from_env()` loads endpoint, key, deployment, timeout, and retry
-  settings.
-- `CosmosConfig.from_env()` loads Cosmos connection settings.
-- `BlobConfig.from_env()` loads the Storage connection string.
-- `TelemetryConfig.from_env()` loads optional Application Insights settings.
-- `parse_repo_url()` extracts organization, project, and repository from an Azure
-  DevOps URL.
-- `AzureDevOpsConfig` exposes `org_url`, `project`, and `repo`.
+Only:
 
-### `shared/cosmos.py`
+```text
+standard-jmeter-template
+```
 
-- `CosmosStore.__init__()` creates the database/container if necessary.
-- `upsert()` writes a Pydantic record with bounded retries for transient connection
-  drops.
-- `get()` reads one record by ID and repository partition.
-- `claim_if_writing()` performs an ETag-guarded atomic claim.
-- `query_by_status()` finds work for pollers.
+is accepted.
 
-### `shared/blob.py`
+## 11.4 HTTP method check
 
-- `upload_text()` creates a container if needed and uploads text.
-- `download_text()` downloads a text Blob.
+```python
+if spec.scenario.method not in ALLOWED_HTTP_METHODS:
+```
 
-### `shared/llm.py`
+For our example:
 
-- `LLMClient.complete()` sends system/user messages to Azure OpenAI, handles
-  timeouts, logs token usage, and returns text.
+```text
+POST
+```
 
-### `shared/telemetry.py`
+is valid.
 
-- `configure_telemetry()` enables Application Insights/OpenTelemetry when configured.
-- `pipeline_run()` creates a trace/span context around a pipeline.
-- `flush_telemetry()` flushes exporters.
+## 11.5 URL path check
 
-## 11. File-by-file implementation guide
+```python
+if not path.startswith("/"):
+```
 
-### Ag Read
+The following is valid:
 
-| File | Main classes/functions | Purpose |
-|---|---|---|
-| `agent.py` | `run()` | Public wrapper around `run_ag_read()`. |
-| `cli.py` | `_parse_args()`, `run()`, `main()` | `python -m ag_read.cli` command and exit codes. |
-| `poller.py` | `_record_id()`, `poll_once()`, `poll_loop()`, `main()` | Finds new active PR commits and triggers Ag Read. |
-| `fetch.py` | `AdoClient`, `fetch_pr_change()` | Azure DevOps REST reads and bounded file retrieval. |
-| `models.py` | `ChangedFile`, `PrChange` | Internal fetch-stage data shapes. |
-| `analyzer.py` | `analyze_change()`, `_coerce_output()` | LLM analysis and `AgReadOutput` validation. |
-| `agent_analyzer.py` | `_build_tools()`, `analyze_change_agentic()` | Optional tool-using Ag Read path. |
-| `instructions.py` | `build_task()` | Builds agentic analysis instructions. |
-| `risk_guard.py` | `is_cosmetic_change()`, `required_risk_floor()`, `apply_risk_floor()` | Deterministic risk corrections. |
-| `graph.py` | `_fetch_node()`, `_analyze_node()`, `_persist_node()`, `_handoff_node()`, `build_graph()`, `run_ag_read()` | LangGraph orchestration. |
-| `persist.py` | `build_record()`, `persist()` | Creates and stores `PrRunRecord`. |
-| `handoff.py` | `handoff_to_ag_write()` | Sets `writing` and invokes/reconciles Ag Write. |
-| `tests/test_risk_floor.py` | risk-floor tests | Verifies sensitive paths cannot be under-rated. |
+```text
+/api/refund
+```
 
-### Ag Write
+The following is rejected:
 
-| File | Main classes/functions | Purpose |
-|---|---|---|
-| `agent.py` | `run()`, `run_from_record()`, `_run_with_clients()` | Direct and durable entry points. |
-| `poller.py` | `poll_once()`, `poll_loop()`, `main()` | Claims and processes `writing` records. |
-| `graph.py` | `_decide_node()`, `_reuse_node()`, `_generate_validate_node()`, `_render_store_node()`, `_finalize_node()`, `build_graph()`, `run_ag_write()` | Main generation workflow. |
-| `coverage.py` | `should_consider_change()`, `primary_component()`, `decide_action_preflight()` | REUSE/MODIFY/CREATE decision. |
-| `catalog.py` | `CatalogEntry`, `component_key()`, `stable_test_name()`, `bump_minor()`, `TestCatalog` | Test identity, versions, and active entries. |
-| `schemas.py` | `TestScenario`, `Assertion`, `WorkloadConfiguration`, `TestSpecification` | Strict internal generation model. |
-| `prompts.py` | `build_user_prompt()` | LLM prompt for a strict specification. |
-| `generator.py` | `_strip_code_fence()`, `_coerce_spec()`, `generate_specification()` | LLM call and JSON parsing. |
-| `validators.py` | `validate_specification()` | Non-AI safety gate. |
-| `renderer.py` | `render_jmx()` and XML helper functions | Deterministic JMeter XML creation. |
-| `api_registry.py` | `ApiEndpoint`, `ApiRegistry`, `get_for_repo()`, `upsert()` | Ground-truth endpoint registry. |
-| `agent_react.py` | `_build_llm()`, `run_agent()` | Optional autonomous tool-calling implementation. |
-| `tools.py` | `RunContext`, `lookup_endpoint()`, `check_catalog()`, `validate_spec()`, `render_and_store()`, `record_reuse()` | Bounded ReAct tool surface. |
-| `tests/` | smoke, negative, catalog, versioning, scenario, API, and ReAct tests | Offline and integration-style verification. |
+```text
+api/refund
+```
 
-### Ag NFT
+Filesystem-looking paths such as `C:\tests\file.jmx` are also rejected.
 
-| File | Main classes/functions | Purpose |
-|---|---|---|
-| `__main__.py` | `main()` | CLI for input JSON or Cosmos document ID. |
-| `agent.py` | `run()`, `run_from_doc()`, `_get_record_any_partition()` | Public entry points and document resolution. |
-| `poller.py` | `_is_done()`, `poll_once()`, `main()` | Manifest-based Blob trigger. |
-| `config.py` | `NftSettings.from_env()` | SLA, Blob, model, and analysis tuning. |
-| `models.py` | `Sample`, `Stats`, `Metrics`, `Check`, `Evaluation`, `Analysis`, `NftReport` | Internal analysis/report shapes. |
-| `storage.py` | `BlobStorage`, `LocalStorage`, `split_blob_url()`, `resolve_names()` | Azure and offline file storage abstraction. |
-| `parsers.py` | `parse_csv()`, `parse_xml()`, `load_samples()` | Converts result files to `Sample`. |
-| `metrics.py` | `compute_stats()`, `build_windows()`, `build_scaling()`, `detect_shock()`, `analyze_samples()` | Deterministic performance calculations. |
-| `evaluate.py` | category check helpers, `evaluate()`, `overall_result()`, `find_baseline()`, `read_log_signals()` | SLA and regression evaluation. |
-| `analyzer.py` | `build_prompt()`, `fallback_analysis()`, `analyze()` | LLM explanation with safe fallback. |
-| `tool_agent.py` | tool-agent analysis loop | Bounded read-only model investigation. |
-| `llm_client.py` | `AzureBackend` and usage helpers | NFT-specific Azure OpenAI adapter. |
-| `report.py` | `build_report()`, `render_json()`, `render_html()` | Machine and human report generation. |
-| `handoff.py` | `persist_outcomes()`, `handoff_to_ag_report()` | Cosmos update and report-agent signal. |
-| `graph.py` | `_load_node()` through `_completion_node()`, `build_graph()`, `run_ag_nft()` | Full NFT workflow. |
-| `measure.py` | `estimate()`, `live()`, `main()` | Measurement/cost utility. |
-| `sample_data.py` | sample-data generator | Creates local test result data. |
-| `test_*.py` | unit/integration tests | Verifies tools, parsing, LLM adapter, and agent flow. |
+## 11.6 Workload limits
 
-### Jenkins, report, and contracts
+The validator checks:
 
-| File | Purpose |
-|---|---|
-| `jenkins/integration.py` | Intended Python Jenkins integration; currently raises `NotImplementedError`. |
-| `jenkins/pipeline_trigger.py` | Starts the ADO NFT pipeline using `ADO_ORG`, `ADO_PROJECT`, `ADO_PIPELINE_ID`, and `ADO_PAT`; never raises to the caller. |
-| `jenkins/Jenkinsfile` | Legacy Jenkins pipeline that downloads/runs JMX files and uploads a summary. |
-| `jenkins/jmeter-pipeline.yml` | ADO pipeline that reads Cosmos, runs JMeter, uploads results, and starts NFT. |
-| `jenkins/nft-agent-pipeline.yml` | ADO pipeline that runs Ag NFT for a `docId`. |
-| `ag_report/agent.py` | Intended final reporting/ADO-defect entry point; currently raises `NotImplementedError`. |
-| `contracts/ag_read_output.py` | `AgReadOutput` and the low/medium/high risk contract. |
-| `contracts/nft_input.py` | `NftInput`, the Jenkins-to-NFT pointer. |
-| `contracts/nft_output.py` | `NftOutcome` and `NftOutput`, the NFT-to-report contract. |
-| `contracts/run_record.py` | `RunStatus`, `TestFile`, `Defect`, and `PrRunRecord`. |
+```python
+if w.threads > 1000:
+```
 
-## 12. Configuration
+```python
+if w.ramp_up_seconds > 3600:
+```
 
-Copy `.env.example` to `.env` for local development:
+```python
+if w.duration_seconds > 3600:
+```
+
+Our example is valid:
+
+```text
+threads = 10
+ramp-up = 30 seconds
+duration = 60 seconds
+```
+
+## 11.7 Assertion check
+
+The validator requires:
+
+```python
+if not spec.assertions:
+```
+
+At least one assertion must exist.
+
+For our example:
+
+```text
+response_success
+```
+
+is allowed.
+
+If `errors` is empty:
+
+```python
+return {
+    "spec": spec,
+    "attempts": attempt,
+    "errors": [],
+    "success": True
+}
+```
+
+If there are validation errors, they are sent back to the model:
+
+```python
+feedback = "; ".join(errors)
+```
+
+The model gets another chance, but only three attempts are allowed.
+
+If all attempts fail:
+
+```python
+return {
+    "attempts": MAX_ATTEMPTS,
+    "success": False,
+    "failure_reason": "validation failed ..."
+}
+```
+
+No JMX file is generated.
+
+---
+
+# 12. Ag Write looks up the real API endpoint
+
+After validation, `_render_store_node()` runs.
+
+It asks the API registry:
+
+```python
+endpoint = api_registry.get_for_repo(ag_read.repo)
+```
+
+For our example, the registry might return:
+
+```python
+ApiEndpoint(
+    host="payments-function.azurewebsites.net",
+    path="/api/refund",
+    method="POST",
+    protocol="https",
+    port=443,
+    content_type="application/json",
+    expected_status=202,
+    function_key="..."
+)
+```
+
+The registry is the ground truth.
+
+The LLM may propose `/api/refund`, but the renderer ultimately uses the registry's path and method when the registry has an entry.
+
+If a request body is registered:
+
+```python
+body = blob.download_text(container, blob_name)
+```
+
+The request body is loaded from Blob Storage.
+
+---
+
+# 13. Ag Write determines test name and version
+
+The code creates a stable test name:
+
+```python
+test_name = stable_test_name(
+    ag_read.repo,
+    api_path,
+)
+```
+
+Example:
+
+```text
+payments-api-refund
+```
+
+If the action is `CREATE`:
+
+```python
+version = "1.0"
+```
+
+If the action is `MODIFY` and the existing version is `1.0`:
+
+```python
+version = "1.1"
+```
+
+The test identity is therefore controlled by the repository/catalog, not by arbitrary model wording.
+
+---
+
+# 14. Ag Write fixes the workload
+
+Before rendering, the code overrides the model's workload:
+
+```python
+spec.workload.threads = FIXED_THREADS
+spec.workload.ramp_up_seconds = FIXED_RAMP_SECONDS
+spec.workload.duration_seconds = FIXED_DURATION_SECONDS
+```
+
+So even if the model requested:
+
+```text
+10,000 threads
+```
+
+the final generated smoke test uses the configured fixed values.
+
+This is another safety layer.
+
+---
+
+# 15. Ag Write creates the JMeter file
+
+The code calls:
+
+```python
+jmx = render_jmx(
+    spec,
+    endpoint=endpoint,
+    body=body,
+    test_name=test_name,
+    version=version,
+)
+```
+
+This calls:
+
+`ag_write/renderer.py`
+
+The renderer creates XML containing:
+
+1. JMeter test plan.
+2. User variables.
+3. Target host.
+4. Target port.
+5. Protocol.
+6. HTTP headers.
+7. HTTP method.
+8. Endpoint path.
+9. Request body.
+10. Assertions.
+11. Result file configuration.
+
+For our example, the important generated request becomes conceptually:
+
+```text
+POST https://payments-function.azurewebsites.net/api/refund
+Content-Type: application/json
+x-functions-key: ${auth.key}
+```
+
+The JMeter file might be named:
+
+```text
+payments-api-refund-v1.0.jmx
+```
+
+---
+
+# 16. Ag Write uploads the JMX file
+
+The graph creates the Blob name:
+
+```python
+blob_name = f"{repo_folder}/{test_name}-v{version}.jmx"
+```
+
+Example:
+
+```text
+payments-api/payments-api-refund-v1.0.jmx
+```
+
+Then:
+
+```python
+blob_url = blob.upload_text(
+    TEST_SCRIPTS_CONTAINER,
+    blob_name,
+    jmx,
+)
+```
+
+The container is:
+
+```text
+test-scripts
+```
+
+If upload fails, the graph stops before updating the catalog:
+
+```text
+No catalog entry
+No Cosmos TestFile entry
+No fake success
+```
+
+This prevents the system from recording a test file that does not exist.
+
+---
+
+# 17. Ag Write updates Cosmos
+
+After successful upload, a `TestFile` is added to the run record:
+
+```python
+TestFile(
+    path="payments-api-refund-v1.0.jmx",
+    type="jmeter",
+    blob_url=blob_url,
+    action="CREATE",
+    endpoint="/api/refund",
+    method="POST",
+    threads=...,
+    ramp_up_seconds=...,
+    duration_seconds=...,
+)
+```
+
+The Cosmos record now contains:
+
+```json
+{
+  "id": "payments-api-42-abc123",
+  "status": "writing",
+  "test_files": [
+    {
+      "path": "payments-api-refund-v1.0.jmx",
+      "type": "jmeter",
+      "blob_url": "https://storage.../test-scripts/...",
+      "action": "CREATE",
+      "endpoint": "/api/refund",
+      "method": "POST"
+    }
+  ]
+}
+```
+
+The finalization node then changes the status:
+
+```text
+writing -> testing
+```
+
+This means:
+
+> Ag Write completed, and the generated test can now be executed.
+
+---
+
+# 18. Ag Write triggers the JMeter pipeline
+
+After a successful Ag Write operation, the code triggers the next pipeline using the run record ID:
+
+```python
+trigger_nft_pipeline(doc_id)
+```
+
+The trigger helper sends an Azure DevOps REST request similar to:
+
+```http
+POST https://dev.azure.com/<org>/<project>/_apis/pipelines/<pipeline-id>/runs
+```
+
+with:
+
+```json
+{
+  "templateParameters": {
+    "docId": "payments-api-42-abc123"
+  }
+}
+```
+
+The document ID is the link between:
+
+```text
+Ag Write -> JMeter pipeline -> Ag NFT
+```
+
+---
+
+# 19. JMeter pipeline reads Cosmos
+
+The pipeline is:
+
+`jenkins/jmeter-pipeline.yml`
+
+It receives:
+
+```text
+docId = payments-api-42-abc123
+```
+
+It queries Cosmos for the document.
+
+Then it extracts:
+
+```text
+test_files
+```
+
+It keeps only records where:
+
+```text
+type == "jmeter"
+path ends with ".jmx"
+action != "DELETE"
+```
+
+For our example:
+
+```text
+payments-api-refund-v1.0.jmx
+```
+
+is selected.
+
+The pipeline downloads the JMX file from the `test-scripts` Blob container.
+
+It then runs JMeter conceptually using:
+
+```text
+jmeter -n
+       -t payments-api-refund-v1.0.jmx
+       -l results.jtl
+       -j jmeter.log
+       -e
+       -o html-report
+```
+
+The output includes:
+
+```text
+results.jtl
+jmeter.log
+html-report/
+```
+
+The result files are uploaded to Blob Storage.
+
+The pipeline updates the Cosmos record with a block similar to:
+
+```json
+{
+  "jmeter_pipeline": {
+    "run_id": "ado-build-100",
+    "results_url": "https://storage.../pipeline-logs/payments-api/42/abc123/100/",
+    "logs_url": "https://storage.../pipeline-logs/payments-api/42/abc123/100/logs/"
+  }
+}
+```
+
+Then it starts the Ag NFT pipeline with the same `docId`.
+
+---
+
+# 20. Ag NFT starts
+
+The NFT pipeline runs:
 
 ```powershell
-Copy-Item .env.example .env
-python -m pip install --user -r requirements.txt
+python -m ag_nft --doc-id payments-api-42-abc123 -v
 ```
 
-Required production groups:
+Python enters:
 
-- Azure OpenAI: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`,
-  `AZURE_OPENAI_DEPLOYMENT`.
-- Azure DevOps: `REPO_URL`, `GIT_TOKEN`; optional `REPO_BASE_BRANCH`.
-- Cosmos: `COSMOS_ENDPOINT`, `COSMOS_KEY`.
-- Blob: `AZURE_STORAGE_CONNECTION_STRING`.
+`ag_nft/main.py`
 
-Optional:
+The CLI parses:
 
-- `APPLICATIONINSIGHTS_CONNECTION_STRING` enables telemetry.
-- `AZURE_OPENAI_TIMEOUT` and `AZURE_OPENAI_MAX_RETRIES` bound model calls.
-- `POLL_INTERVAL_SEC` controls poller frequency.
-- `AG_READ_AGENTIC=true` enables agentic Ag Read.
-- `NFT_*` variables tune containers, SLAs, shock detection, and analysis mode.
-- `ADO_ORG`, `ADO_PROJECT`, `ADO_PIPELINE_ID`, `ADO_PAT` enable the NFT pipeline
-  trigger from Ag Write.
-
-Never commit `.env`, API keys, PATs, Cosmos keys, Storage connection strings, or
-Function keys.
-
-## 13. Useful local commands
-
-```powershell
-# Ag Read for one PR
-python -m ag_read.cli --pr-id 42 --verbose
-
-# Ag Read durable poller
-python -m ag_read.poller --once
-
-# Ag Write durable poller
-python -m ag_write.poller --once
-
-# Ag NFT from a saved contract JSON
-python -m ag_nft --input .\nft_input.json --no-llm --no-persist --no-handoff
-
-# Ag NFT from a Cosmos document
-python -m ag_nft --doc-id payments-api-42-a1b2c3d4
-
-# Ag NFT fully offline against a local storage directory
-python -m ag_nft --input .\nft_input.json --local-root .\store --no-llm
+```text
+--doc-id payments-api-42-abc123
 ```
 
-The test suite is mostly standard-library `unittest` and script-style tests. Run
-the focused tests first, for example:
+Then it calls:
 
-```powershell
-python -m unittest discover -s ag_nft -p "test_*.py"
-python ag_read\tests\test_risk_floor.py
-python ag_write\tests\test_negative.py
+```python
+output = run_from_doc(
+    args.doc_id,
+    settings=settings,
+    storage=storage,
+    persist=True,
+    handoff=True,
+)
 ```
 
-## 14. Important current limitations
+This calls:
 
-1. `ag_report/agent.py` is not implemented, so automatic ADO defect creation is
-   not complete in this checkout.
-2. `jenkins/integration.py` is a stub. The checked-in ADO YAML pipelines provide
-   the more complete execution path.
-3. `AgReadOutput` is intentionally descriptive; Ag Write owns coverage and the
-   REUSE/MODIFY/CREATE decision.
-4. LLM output is not trusted for final safety decisions. Ag Write validation and
-   Ag NFT evaluation are deterministic.
-5. The generated JMX currently contains the registered Function key as a default
-   property so it can run standalone. Treat generated scripts and Blob access as
-   sensitive; prefer pipeline overrides and restricted storage access.
+`ag_nft/agent.py`
 
-## 15. One complete example
+---
 
-Assume PR `42` changes `src/payments/refund.py`.
+# 21. Ag NFT resolves the JMeter results
 
-1. Azure DevOps starts `azure-pipelines.yml`.
-2. Ag Read fetches the PR and sees the changed file.
-3. The model returns:
+`run_from_doc()` first loads Cosmos:
 
-   ```json
-   {
-     "changed_components": ["payments/refund"],
-     "risk_level": "high",
-     "suggested_tests": ["POST /api/refund rejects unauthorized requests"],
-     "release_notes": "Refund authorization was tightened."
-   }
-   ```
+```python
+store = CosmosStore.from_env()
+```
 
-4. Cosmos receives:
+Then it finds the record by ID:
 
-   ```text
-   id = payments-api-42-<commit>
-   status = writing
-   ```
+```python
+record = _get_record_any_partition(store, doc_id)
+```
 
-5. Ag Write checks the catalog. If no `payments/refund` test exists, it chooses
-   `CREATE`; if version `1.0` exists, it chooses `MODIFY` because the change is
-   high risk.
-6. The LLM proposes a bounded JMeter specification.
-7. The validator rejects unsafe values such as 10,000 threads or a filesystem
-   path. After a valid proposal, the renderer creates `payments-refund-v1.0.jmx`.
-8. The JMX is uploaded to Blob and added to `test_files` in Cosmos.
-9. Ag Write starts the JMeter ADO pipeline.
-10. JMeter writes `results.jtl` and logs.
-11. Ag NFT parses the samples. If p95 is 720 ms, the default 500 ms check fails.
-12. Ag NFT writes `nft_report.html` and `nft_report.json`, stores outcomes such as
-    `performance = fail`, and attempts the Ag Report handoff.
-13. Once Ag Report is implemented, it can turn the finding into an Azure DevOps
-    defect linked to the PR, report, commit, and test case.
+Because the repository is not reliably extractable from the ID, it uses a cross-partition query:
 
-That is the complete intended lifecycle from PR trigger to non-functional-test
-report.
+```sql
+SELECT * FROM c WHERE c.id = @id
+```
+
+Then it looks for:
+
+```python
+block = record.jmeter_pipeline
+```
+
+It extracts:
+
+```python
+results_url = block.get("results_url")
+logs_url = block.get("logs_url")
+```
+
+Then it constructs the `NftInput` contract:
+
+```python
+NftInput(
+    repo=record.repo,
+    pr_id=record.pr_id,
+    commit_sha=record.commit_sha,
+    run_id="ado-build-100",
+    tool="jmeter",
+    results_blob_url=results_url,
+    logs_blob_url=logs_url,
+)
+```
+
+Example:
+
+```json
+{
+  "repo": "payments-api",
+  "pr_id": "42",
+  "commit_sha": "abc123",
+  "run_id": "ado-build-100",
+  "tool": "jmeter",
+  "results_blob_url": ".../results/",
+  "logs_blob_url": ".../logs/"
+}
+```
+
+Then:
+
+```python
+return run(nft_input, ...)
+```
+
+---
+
+# 22. Ag NFT LangGraph workflow
+
+The NFT graph is in:
+
+`ag_nft/graph.py`
+
+The workflow is:
+
+```text
+START
+  |
+  v
+load
+  |
+  v
+evaluate
+  |
+  v
+analyze
+  |
+  v
+report
+  |
+  v
+persist
+  |
+  v
+handoff
+  |
+  v
+complete
+  |
+  v
+END
+```
+
+---
+
+# 23. NFT load node reads results
+
+`_load_node()` starts with:
+
+```python
+container, names = resolve_names(
+    storage,
+    nft_input.results_blob_url
+)
+```
+
+For our example, it may find:
+
+```text
+pipeline-logs
+    payments-api/42/abc123/100/results.jtl
+    payments-api/42/abc123/100/jmeter.log
+```
+
+Then it keeps supported result files:
+
+```python
+candidates = [
+    n for n in names
+    if n.lower().endswith((".jtl", ".csv", ".xml"))
+]
+```
+
+So `results.jtl` is selected.
+
+If no result file exists:
+
+```python
+raise NftRunError(...)
+```
+
+Then:
+
+```python
+samples, used = load_samples(
+    storage,
+    container,
+    candidates,
+)
+```
+
+This calls:
+
+`ag_nft/parsers.py`
+
+---
+
+# 24. Parsing the JMeter file
+
+For CSV/JTL files, `parse_csv()` reads rows.
+
+A JMeter row may look like:
+
+```csv
+timeStamp,elapsed,label,responseCode,success,allThreads
+1729000000000,420,Refund,202,true,5
+```
+
+The parser converts it to:
+
+```python
+Sample(
+    ts=1729000000000,
+    elapsed=420,
+    label="Refund",
+    ok=True,
+    threads=5,
+    code="202",
+    message=""
+)
+```
+
+If a request failed:
+
+```csv
+1729000001000,820,Refund,500,false,5
+```
+
+it becomes:
+
+```python
+Sample(
+    ts=1729000001000,
+    elapsed=820,
+    label="Refund",
+    ok=False,
+    threads=5,
+    code="500",
+    message=""
+)
+```
+
+The result is a list:
+
+```python
+[
+    Sample(...420 ms, ok=True...),
+    Sample(...820 ms, ok=False...),
+    ...
+]
+```
+
+If a row is invalid, it is skipped and logged.
+
+If no readable samples are found:
+
+```python
+raise NftRunError(...)
+```
+
+---
+
+# 25. NFT calculates metrics
+
+The load node calls:
+
+```python
+metrics = analyze_samples(
+    samples,
+    settings,
+    used,
+)
+```
+
+This calls:
+
+`ag_nft/metrics.py`
+
+## 25.1 Overall statistics
+
+`compute_stats()` calculates:
+
+```python
+failures = sum(1 for s in samples if not s.ok)
+```
+
+Then:
+
+```python
+error_pct = failures / total * 100
+```
+
+It calculates:
+
+- Average latency
+- p50 latency
+- p95 latency
+- p99 latency
+- Maximum latency
+- Throughput
+- Total duration
+
+Example:
+
+```text
+100 requests
+5 failed
+average = 390 ms
+p95 = 720 ms
+p99 = 950 ms
+throughput = 8.4 requests/sec
+error rate = 5%
+```
+
+## 25.2 Per-label metrics
+
+`per_label()` groups samples by label.
+
+For our example:
+
+```text
+Refund
+```
+
+It calculates statistics for the Refund transaction separately.
+
+## 25.3 Time windows
+
+`build_windows()` divides the run into windows, for example every 5 seconds:
+
+```text
+Window 0: 0-5 seconds
+Window 1: 5-10 seconds
+Window 2: 10-15 seconds
+```
+
+Each window stores:
+
+- Request count
+- Failures
+- Throughput
+- p95
+- Error percentage
+- Active threads
+
+## 25.4 Scalability metrics
+
+`build_scaling()` checks whether active threads increased significantly.
+
+If the test runs with:
+
+```text
+5 threads -> 10 threads -> 20 threads
+```
+
+the code calculates:
+
+```text
+throughput growth
+thread growth
+scaling efficiency
+p95 latency growth
+```
+
+For example:
+
+```text
+Throughput doubled while threads doubled
+Efficiency = 1.0
+```
+
+## 25.5 Shock metrics
+
+`detect_shock()` finds sudden load increases.
+
+Example:
+
+```text
+Previous window: 10 threads
+Next window: 50 threads
+```
+
+If this exceeds the configured shock factor and minimum delta, it analyzes:
+
+- p95 during the spike
+- Error rate during the spike
+- Peak throughput
+- Whether the system recovered after the spike
+- Recovery time
+
+The final `Metrics` object may look like:
+
+```python
+Metrics(
+    overall=Stats(
+        count=100,
+        failures=5,
+        error_pct=5.0,
+        avg_ms=390,
+        p95_ms=720,
+        p99_ms=950,
+        throughput_rps=8.4,
+        ...
+    ),
+    per_label=[...],
+    windows=[...],
+    scaling=...,
+    shock=...,
+    errors=[...],
+)
+```
+
+The load node returns:
+
+```python
+return {"metrics": metrics}
+```
+
+---
+
+# 26. NFT evaluates the metrics
+
+The next node is `_evaluate_node()`.
+
+It finds a previous passing baseline:
+
+```python
+baseline = find_baseline(...)
+```
+
+It also reads error signals from logs:
+
+```python
+signals = read_log_signals(...)
+```
+
+Then calls:
+
+```python
+evaluation = evaluate(
+    state["metrics"],
+    settings,
+    baseline,
+    signals,
+)
+```
+
+This calls:
+
+`ag_nft/evaluate.py`
+
+The rules are deterministic.
+
+## Example performance rules
+
+Default configuration:
+
+```text
+p95 target = 500 ms
+p99 target = 1000 ms
+error-rate target = 1%
+```
+
+Our results:
+
+```text
+p95 = 720 ms
+p99 = 950 ms
+error rate = 5%
+```
+
+The checks become:
+
+```text
+p95 latency       -> fail
+p99 latency       -> pass
+error rate        -> fail
+```
+
+The LLM is not involved in deciding these results.
+
+## Category result
+
+The `_outcome()` function applies:
+
+```python
+if any check is fail:
+    category result = fail
+elif any check is warn:
+    category result = partial
+else:
+    category result = pass
+```
+
+So our outcomes might be:
+
+```json
+[
+  {
+    "category": "performance",
+    "result": "fail",
+    "throughput": 8.4
+  },
+  {
+    "category": "load",
+    "result": "fail",
+    "throughput": 8.4
+  }
+]
+```
+
+The evaluation object contains:
+
+```python
+Evaluation(
+    metrics=metrics,
+    checks=checks,
+    outcomes=outcomes,
+    baseline=baseline,
+    limitations=limitations,
+    log_signals=signals,
+)
+```
+
+---
+
+# 27. NFT asks the LLM for explanations
+
+The next node is `_analyze_node()`:
+
+```python
+analysis = analyze(
+    state["evaluation"],
+    state["settings"],
+    run,
+    state.get("llm"),
+)
+```
+
+This calls:
+
+`ag_nft/analyzer.py`
+
+The important rule is:
+
+> The LLM explains the results. It does not determine the results.
+
+If all checks pass, the system may avoid an LLM call:
+
+```python
+if all(c.status == "pass" for c in evaluation.checks):
+    return template_analysis(evaluation)
+```
+
+If a check fails, the system can use tool mode or digest mode.
+
+The model may produce:
+
+```json
+{
+  "summary": "Refund performance exceeded the p95 target and showed an elevated error rate.",
+  "check_explanations": {
+    "perf.p95": "The 720 ms p95 is above the 500 ms target.",
+    "load.error_rate": "Five percent of requests failed, exceeding the 1 percent limit."
+  },
+  "hypotheses": [
+    {
+      "statement": "The refund service may be waiting on a downstream payment provider.",
+      "confidence": "HYPOTHESIS",
+      "related_check": "perf.p95"
+    }
+  ],
+  "suggestions": [
+    "Review downstream payment-provider latency.",
+    "Check refund-service connection-pool limits."
+  ],
+  "limitations": [
+    "No server CPU or database metrics were available."
+  ]
+}
+```
+
+If the LLM returns invalid JSON or fails, `analyze()` catches the issue and uses:
+
+```python
+fallback_analysis(...)
+```
+
+Therefore, report generation still continues.
+
+---
+
+# 28. NFT creates the report
+
+The next node is `_report_node()`:
+
+```python
+report = build_report(
+    nft_input,
+    evaluation,
+    analysis,
+)
+```
+
+This calls:
+
+`ag_nft/report.py`
+
+`build_report()` creates findings from failed checks:
+
+```python
+for c in evaluation.checks
+if c.status != "pass"
+```
+
+For our example, findings include:
+
+```text
+p95 latency: 720 ms vs target 500 ms
+error rate: 5% vs target 1%
+```
+
+Then it creates an `NftReport` containing:
+
+- Repository
+- PR
+- Commit
+- Run ID
+- Overall result
+- Summary
+- Checks
+- Findings
+- Suggestions
+- Limitations
+- Metrics
+- Baseline
+
+The report is rendered to HTML:
+
+```python
+render_html(report)
+```
+
+Then uploaded:
+
+```python
+html_url = storage.write_text(
+    container,
+    f"{prefix}/nft_report.html",
+    render_html(report),
+    "text/html",
+)
+```
+
+The path is conceptually:
+
+```text
+automation-output/
+  payments-api/
+    42/
+      abc123/
+        ado-build-100/
+          nft_report.html
+```
+
+An `NftOutput` object is created:
+
+```python
+NftOutput(
+    repo="payments-api",
+    pr_id="42",
+    commit_sha="abc123",
+    run_id="ado-build-100",
+    outcomes=evaluation.outcomes,
+    suggestions=analysis.suggestions,
+    report_blob_url=html_url,
+)
+```
+
+---
+
+# 29. NFT persists the result to Cosmos
+
+The `_persist_node()` executes:
+
+```python
+persist_outcomes(
+    state["output"],
+    report=state.get("report"),
+)
+```
+
+This calls:
+
+`ag_nft/handoff.py`
+
+It reconstructs the record ID:
+
+```python
+record_id = f"{output.repo}-{output.pr_id}-{output.commit_sha}"
+```
+
+For our example:
+
+```text
+payments-api-42-abc123
+```
+
+Then it loads the existing record:
+
+```python
+record = store.get(record_id, output.repo)
+```
+
+It updates fields such as:
+
+```python
+record.nft_outcomes = output.outcomes
+record.suggestions = output.suggestions
+```
+
+Then:
+
+```python
+store.upsert(record)
+```
+
+The Cosmos record now contains:
+
+```json
+{
+  "id": "payments-api-42-abc123",
+  "status": "testing",
+  "nft_outcomes": [
+    {
+      "category": "performance",
+      "result": "fail",
+      "throughput": 8.4
+    }
+  ],
+  "suggestions": [
+    "Review downstream payment-provider latency."
+  ]
+}
+```
+
+---
+
+# 30. NFT calls Ag Report
+
+The next node calls:
+
+```python
+handoff_to_ag_report(state["output"])
+```
+
+This attempts:
+
+```python
+from ag_report.agent import run as ag_report_run
+ag_report_run(output)
+```
+
+The current implementation is:
+
+`ag_report/agent.py`
+
+It currently contains:
+
+```python
+raise NotImplementedError(
+    "Ag Report is implemented on branch feature/ag-report."
+)
+```
+
+So today the system logs:
+
+```text
+Ag Report is not implemented yet
+```
+
+The NFT report has already been stored in Blob, so the analysis is not lost.
+
+When Ag Report is implemented, it is expected to:
+
+1. Read `NftOutput`.
+2. Create an Azure DevOps report.
+3. Create defects for failed checks.
+4. Set severity.
+5. Link the defect to the PR.
+6. Link the report and test case.
+7. Update the Cosmos `defects` section.
+
+---
+
+# 31. NFT writes the completion marker
+
+The final node is `_completion_node()`:
+
+```python
+storage.write_text(
+    settings.reports_container,
+    f"{prefix}/{REPORT_JSON}",
+    render_json(state["report"]),
+    "application/json",
+)
+```
+
+This writes:
+
+```text
+nft_report.json
+```
+
+The final Blob path is:
+
+```text
+automation-output/
+  payments-api/
+    42/
+      abc123/
+        ado-build-100/
+          nft_report.json
+```
+
+This JSON file is intentionally written last.
+
+The NFT poller treats the existence of `nft_report.json` as:
+
+```text
+This run completed successfully.
+```
+
+The complete graph ends:
+
+```python
+return build_graph().invoke(...)
+```
+
+---
+
+# 32. Final state for our example
+
+At the end, the system has:
+
+## Cosmos DB record
+
+```json
+{
+  "id": "payments-api-42-abc123",
+  "repo": "payments-api",
+  "pr_id": "42",
+  "commit_sha": "abc123",
+  "status": "testing",
+  "ag_read": {
+    "changed_components": ["payments/refund"],
+    "risk_level": "high",
+    "suggested_tests": [
+      "Verify unauthorized users cannot issue refunds"
+    ]
+  },
+  "test_files": [
+    {
+      "path": "payments-api-refund-v1.0.jmx",
+      "type": "jmeter",
+      "action": "CREATE",
+      "endpoint": "/api/refund"
+    }
+  ],
+  "nft_outcomes": [
+    {
+      "category": "performance",
+      "result": "fail",
+      "throughput": 8.4
+    }
+  ],
+  "suggestions": [
+    "Review downstream payment-provider latency."
+  ]
+}
+```
+
+## Blob Storage files
+
+```text
+test-scripts/payments-api/payments-api-refund-v1.0.jmx
+
+pipeline-logs/payments-api/42/abc123/ado-build-100/results.jtl
+
+pipeline-logs/payments-api/42/abc123/ado-build-100/jmeter.log
+
+automation-output/payments-api/42/abc123/ado-build-100/nft_report.html
+
+automation-output/payments-api/42/abc123/ado-build-100/nft_report.json
+```
+
+---
+
+# 33. Complete call chain in one view
+
+```text
+azure-pipelines.yml
+    |
+    | python -m ag_read.cli --pr-id 42
+    v
+ag_read/cli.py
+    |
+    | main()
+    v
+ag_read/graph.py
+    |
+    | run_ag_read("42")
+    v
+_fetch_node()
+    |
+    | fetch_pr_change()
+    v
+ag_read/fetch.py
+    |
+    | get_pr()
+    | latest_iteration_id()
+    | iteration_changes()
+    | file_content()
+    v
+PrChange
+    |
+    v
+_analyze_node()
+    |
+    | analyze_change()
+    v
+ag_read/analyzer.py
+    |
+    | LLM call
+    | json.loads()
+    | AgReadOutput validation
+    | cosmetic guard
+    | sensitive-path risk floor
+    v
+AgReadOutput
+    |
+    v
+_persist_node()
+    |
+    | build_record()
+    | CosmosStore.upsert()
+    v
+PrRunRecord(status="analyzing")
+    |
+    v
+_handoff_node()
+    |
+    | status = "writing"
+    | CosmosStore.upsert()
+    | ag_write.agent.run()
+    v
+Ag Write
+    |
+    | decide REUSE/MODIFY/CREATE
+    | generate specification
+    | validate specification
+    | render JMX
+    | upload to Blob
+    | update catalog
+    | update Cosmos
+    v
+PrRunRecord(status="testing")
+    |
+    v
+JMeter/Azure pipeline
+    |
+    | download JMX
+    | run JMeter
+    | upload results/logs
+    | update jmeter_pipeline
+    v
+Ag NFT
+    |
+    | run_from_doc()
+    | create NftInput
+    v
+ag_nft/graph.py
+    |
+    | load
+    | parse results
+    | calculate metrics
+    | evaluate rules
+    | LLM explanation/fallback
+    | create HTML report
+    | persist outcomes
+    | handoff to Ag Report
+    | write JSON completion marker
+    v
+Final NFT report
+```
+
+The key design principle is:
+
+> Ag Read understands the code change.  
+> Ag Write creates the executable test.  
+> JMeter runs the test.  
+> Ag NFT measures and evaluates the result.  
+> Ag Report is intended to create the final Azure DevOps defect.
